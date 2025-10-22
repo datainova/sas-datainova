@@ -1,0 +1,182 @@
+Login — Documentação Detalhada (DataInova SaaS)
+Documento técnico e de UX cobrindo login por email/senha, Google (OIDC), criar conta e esqueci senha por Magic Link. Inclui fluxos, contratos de API, modelos de dados, segurança, e critérios de aceite. Stack: React/TS (frontend), Node/TS + Fastify (backend), PostgreSQL (RLS).
+
+1) Escopo & Objetivos
+	•	Permitir acesso seguro ao SaaS com email/senha e Entrar com Google.
+	•	Oferecer Criar conta via email (link de finalização) com redirecionamento direto ao Onboarding Wizard.
+	•	Oferecer Esqueci minha senha por Magic Link (token de uso único, TTL curto).
+	•	Implementar antienumeração, rate limit e auditoria para conformidade.
+
+2) Requisitos
+2.1 Funcionais (RF)
+	•	Login form com email e senha; botão Entrar; Entrar com Google; Criar conta; Esqueci minha senha.
+	•	Criar conta: captura email → envia link de finalização → definir senha → entra e vai ao Onboarding.
+	•	Esqueci senha: captura email → envia Magic Link → redefinir senha → entrar.
+	•	Primeiro login: após sucesso, se usuário ainda não configurou a org, abrir Onboarding.
+	•	Multiorg (se aplicável): após login, se o usuário pertence a várias orgs, exibir selector.
+2.2 Não Funcionais (RNF)
+	•	Segurança: Argon2id para hash de senha; tokens de reset/signup de uso único; mensagens genéricas (antienumeração); logs sem PII.
+	•	Disponibilidade: p95 de login < 2s; emails enviados < 10s (assíncrono).
+	•	Observabilidade: logs estruturados e métricas de tentativas/erros; auditoria de eventos críticos.
+
+3) UX da Tela de Login
+	•	Campos: Email (obrigatório), Senha (obrigatória).
+	•	CTAs: Entrar, Entrar com Google, Criar conta, Esqueci minha senha.
+	•	Layout: card central (420–480px), logotipo discreto, título “Acessar sua conta”.
+	•	Acessibilidade: labels/ARIA; foco em erros; teclado completo.
+	•	Mensagens (genéricas): “Credenciais inválidas. Verifique seu email e senha.”; “Não foi possível entrar agora. Tente novamente.”
+
+4) Fluxos (alto nível)
+4.1 Login (email/senha)
+sequenceDiagram
+  participant U as Usuário
+  participant FE as Frontend
+  participant API as API
+  participant DB as Postgres
+
+  U->>FE: Preenche email + senha
+  FE->>API: POST /auth/login {email, password}
+  API->>DB: Verifica usuário + hash Argon2id
+  DB-->>API: OK
+  API-->>FE: 200 (Set-Cookie refresh) + accessToken
+  FE->>FE: Redireciona (Onboarding ou Home)
+4.2 Criar conta (email → finalização → Onboarding)
+sequenceDiagram
+  U->>FE: Clica "Criar conta"
+  FE->>API: POST /auth/signup {email}
+  API->>DB: Cria signup_token (TTL)
+  API-->>FE: 202 Accepted
+  API-->>U: Email com link de finalização
+  U->>FE: Abre link
+  FE->>API: GET /auth/signup/confirm?token=...
+  API-->>FE: 200 OK (válido)
+  U->>FE: Define senha
+  FE->>API: POST /auth/signup/complete {token, password}
+  API->>DB: Cria usuário + zera token
+  API-->>FE: 201 + sessão
+  FE->>FE: Redireciona para Onboarding
+4.3 Esqueci senha (Magic Link)
+sequenceDiagram
+  U->>FE: Clica "Esqueci minha senha"
+  FE->>API: POST /auth/password/forgot {email}
+  API->>DB: Cria reset_token (TTL)
+  API-->>U: Email com Magic Link
+  U->>FE: Abre link de reset
+  FE->>API: GET /auth/password/validate?token=...
+  API-->>FE: 200 OK (válido)
+  U->>FE: Informa nova senha
+  FE->>API: POST /auth/password/reset {token, newPassword}
+  API->>DB: Valida + atualiza hash + invalida token
+  API-->>FE: 200 + sessão
+  FE->>FE: Redireciona para Home/Onboarding
+4.4 Entrar com Google (OIDC)
+sequenceDiagram
+  U->>FE: Clica "Entrar com Google"
+  FE->>API: GET /auth/oidc/google/init (state, pkce)
+  API-->>U: Redirect Google (code flow + PKCE)
+  U->>API: Callback /auth/oidc/google/callback?code=...
+  API->>Google: Troca code por tokens; lê profile/email verificados
+  API->>DB: Upsert usuário; cria sessão
+  API-->>FE: 302/200 + sessão
+  FE->>FE: Redireciona (Onboarding se 1º acesso)
+
+5) Contratos de API (REST)
+5.1 POST /auth/login
+Req { email: string, password: string }
+Res 200 OK { accessToken: string, user: {...}, orgs?: [...] } + Set-Cookie: refreshToken (httpOnly, Secure, SameSite=Lax)
+Erros: 401 InvalidCredentials, 429 TooManyAttempts
+5.2 POST /auth/token (refresh)
+Req: cookie refreshToken (ou body { refreshToken } em fallback)
+Res: 200 OK { accessToken } (rotaciona refresh; replaydetection)
+5.3 POST /auth/logout
+Req: cookie refreshToken
+Res: 204 No Content (revoga refresh e limpa cookie)
+5.4 POST /auth/signup
+Req { email }
+Res: 202 Accepted (mensagem genérica; não revela existência)
+5.5 GET /auth/signup/confirm?token=...
+Res: 200 OK { email } (para exibir tela de definir senha) | 400/410 expiração
+5.6 POST /auth/signup/complete
+Req { token, password }
+Res: 201 Created { accessToken, user } + cookie de refresh
+5.7 POST /auth/password/forgot
+Req { email }
+Res: 202 Accepted (mensagem genérica)
+5.8 GET /auth/password/validate?token=...
+Res: 200 OK { email } | 400/410 expiração
+5.9 POST /auth/password/reset
+Req { token, newPassword }
+Res: 200 OK { accessToken }
+5.10 OIDC Google
+	•	GET /auth/oidc/google/init → redireciona p/ Google (code flow + PKCE; scopes openid email profile)
+	•	GET /auth/oidc/google/callback → finaliza, cria sessão
+Formato de erro: Problem+JSON { type, title, detail, code }.
+
+6) Modelos de Dados (Auth)
+6.1 user
+id uuid PK · email text unique · password_hash text nullable · email_verified_at timestamptz · last_login_at timestamptz · created_at · updated_at · status {active|blocked}
+6.2 user_role (já definido)
+(user_id, org_id, role)
+6.3 auth_refresh_token
+id uuid PK · user_id uuid FK · token_hash text · issued_at ts · expires_at ts · revoked_at ts? · user_agent text? · ip inet?
+	•	Rotação: na troca de token (/auth/token) gerar novo RT, revogando o anterior; detectar replay.
+6.4 auth_signup_token
+id uuid PK · email text · token_hash text · expires_at ts · used_at ts? · created_at
+6.5 auth_reset_token
+id uuid PK · user_id uuid FK · token_hash text · expires_at ts · used_at ts? · created_at
+6.6 auth_login_attempt (opcional)
+id uuid · email text · ip inet · user_agent text · success bool · ts (para rate/monitoria)
+Hash de tokens: nunca armazenar tokens em claro; guardar hash (ex.: sha256) e comparar no resgate.
+
+7) Segurança
+	•	Hash de senha: Argon2id (memória ≥ 64MB, iterações adequadas), com pepper do KMS.
+	•	Tokens: aleatórios (≥ 128 bits), uso único e TTL 30–60min; invalidar ao usar.
+	•	Antienumeração: respostas idênticas em signup/reset; no login, erro genérico.
+	•	Rate limiting: tentativas por IP e por email (ex.: 5/min; aumentar atraso progressivo; captcha após N falhas).
+	•	Cookies: httpOnly, Secure, SameSite=Lax; para OIDC crosssite, considerar SameSite=None; Secure no estado da auth.
+	•	CSRF: se o access/refresh for stateful em cookie, aplicar CSRF token (double submit) nas rotas mutativas.
+	•	CORS: restringir às origens conhecidas do frontend.
+	•	Logs: sem email completo em erros frequentes (mas auditável em nível seguro); nunca logar senha/token.
+	•	Auditoria: eventos USER_LOGIN, USER_LOGOUT, PASSWORD_RESET, SIGNUP_COMPLETED com actor, ip, ua.
+
+8) Emails Transacionais (templates)
+8.1 Finalizar cadastro
+Assunto: “Confirme seu cadastro — DataInova” Corpo: “Olá! Recebemos seu email. Para finalizar seu cadastro, clique no link abaixo: [Finalizar Cadastro]. Este link expira em 60 minutos.”
+8.2 Redefinir senha (Magic Link)
+Assunto: “Redefina sua senha — DataInova” Corpo: “Recebemos uma solicitação para redefinir sua senha. Use o link abaixo dentro de 60 minutos. Se não foi você, ignore este email.”
+Boas práticas: incluir IP/UA aproximados (quando fizer sentido), link secundário para solicitar novo token, TTL explícito.
+
+9) Frontend (Fluxos & Guards)
+	•	authGuard: exige accessToken válido; se ausente, redireciona a /login.
+	•	planGuard: verifica entitlements após login; oculta recursos indisponíveis.
+	•	roleGuard: bloqueia rotas que exigem MANAGER+.
+	•	Póslogin: se firstLogin/sem org configurada → /onboarding; senão /.
+	•	Estados: loading spinner no submit; toasts para falhas; mensagens acessíveis.
+
+10) Telemetria & Métricas
+	•	Eventos: login_viewed, login_success, login_failed, signup_email_submitted, signup_link_sent, signup_completed, reset_link_requested, reset_link_sent, password_reset_completed.
+	•	Métricas: taxa de erro de login, tempo médio de envio de email, conversão de signup → onboarding, tentativas bloqueadas por ratelimit/captcha.
+
+11) Critérios de Aceite (QA)
+	•	Login válido retorna 200 com sessão; inválido retorna erro genérico; após N falhas, atraso/captcha.
+	•	Criar conta envia email; link válido permite definir senha e entrar; links expirados mostram CTA de novo envio.
+	•	Esqueci senha envia email e permite redefinição; token de reset é de uso único.
+	•	Google OIDC funciona (code flow + PKCE); primeiro acesso cai no Onboarding.
+	•	Acessibilidade: navegação por teclado 100%; contraste AA; leitores de tela anunciam erros.
+
+12) Exemplos (payloads)
+12.1 /auth/login — sucesso
+{
+  "accessToken": "eyJhbGciOi...",
+  "user": {"id":"u_123","email":"thiago@empresa.com"}
+}
+12.2 /auth/signup — 202
+{ "message": "Se encontrarmos seu email, você receberá um link para finalizar o cadastro." }
+12.3 /auth/password/forgot — 202
+{ "message": "Se encontrarmos sua conta, enviaremos um link para redefinir a senha." }
+
+13) Roadmap
+	•	MFA (TOTP/WebAuthn), Passkeys, detecção de risco (impossível travel/device), SSO enterprise (OIDC/SAML) e descoberta por domínio.
+
+FIM — Login Detalhado
+

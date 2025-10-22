@@ -1,0 +1,2018 @@
+{
+  "meta": {
+    "name": "DataInova SaaS — Dicionário de Dados",
+    "version": "1.0.0",
+    "generated_at_utc": "2025-10-22T05:58:59Z",
+    "description_pt": "Dicionário de dados completo do SaaS de Objetivos Estratégicos, K‑Results e KPIs (multi-tenant, agregados por período).",
+    "conventions": {
+      "db_naming": "snake_case para tabelas e colunas",
+      "api_naming": "camelCase em payloads JSON da API",
+      "ids": "uuid (v4) para chaves primárias; compostas quando indicado",
+      "timestamps": "timestamptz; created_at=now(); updated_at=now()/updatedAt automático",
+      "timezone_policy": "period_start ancorado no timezone da organização; persistência em UTC",
+      "rls": "Row Level Security forçada por org_id em tabelas com dados de cliente",
+      "privacy": "sem PII em IndicatorValue; logs sem payloads sensíveis"
+    }
+  },
+  "enums": {
+    "cadence": [
+      "DAILY",
+      "WEEKLY",
+      "MONTHLY",
+      "QUARTERLY",
+      "SEMIANNUAL",
+      "ANNUAL",
+      "BIENNIAL"
+    ],
+    "direction": [
+      "INCREASE",
+      "DECREASE",
+      "MAINTAIN"
+    ],
+    "objective_status": [
+      "DRAFT",
+      "ACTIVE",
+      "ARCHIVED"
+    ],
+    "indicator_type": [
+      "KR",
+      "KPI"
+    ],
+    "indicator_status": [
+      "DRAFT",
+      "ACTIVE",
+      "ARCHIVED"
+    ],
+    "value_status_calc": [
+      "ON",
+      "RISK",
+      "OFF",
+      "STALE"
+    ],
+    "plan_name": [
+      "FREE",
+      "PRO",
+      "ENTERPRISE"
+    ],
+    "agent_status": [
+      "ONLINE",
+      "OFFLINE",
+      "DEGRADED",
+      "PENDING"
+    ],
+    "job_status": [
+      "QUEUED",
+      "RUNNING",
+      "SUCCEEDED",
+      "FAILED",
+      "CANCELLED"
+    ],
+    "alert_type": [
+      "DEVIATION",
+      "STALENESS",
+      "INGEST_FAILURE",
+      "VALIDATION"
+    ],
+    "alert_severity": [
+      "LOW",
+      "MEDIUM",
+      "HIGH",
+      "CRITICAL"
+    ],
+    "checkin_status": [
+      "ON",
+      "RISK",
+      "OFF"
+    ],
+    "subscription_status": [
+      "active",
+      "trialing",
+      "past_due",
+      "canceled",
+      "incomplete",
+      "incomplete_expired",
+      "unpaid"
+    ],
+    "wizard_type": [
+      "ONBOARDING",
+      "OBJECTIVE",
+      "KR",
+      "KPI"
+    ]
+  },
+  "entities": {
+    "plan": {
+      "table": "plan",
+      "description": "Planos comerciais do SaaS.",
+      "rls": {
+        "enabled": false,
+        "policy": "tabela global"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "description": "PK"
+        },
+        "name": {
+          "type": "text",
+          "nullable": false,
+          "enum": "plan_name",
+          "description": "FREE | PRO | ENTERPRISE"
+        },
+        "limits_json": {
+          "type": "jsonb",
+          "nullable": true,
+          "description": "Limites (ex.: max_indicators, min_sync_interval)"
+        },
+        "features_json": {
+          "type": "jsonb",
+          "nullable": true,
+          "description": "Flags de features habilitadas"
+        },
+        "created_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        },
+        "updated_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        }
+      },
+      "indexes": [
+        {
+          "name": "ux_plan_name",
+          "unique": true,
+          "columns": [
+            "name"
+          ]
+        }
+      ]
+    },
+    "entitlement": {
+      "table": "entitlement",
+      "description": "Recursos e limites por plano.",
+      "rls": {
+        "enabled": false,
+        "policy": "tabela global"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        "plan_id": {
+          "type": "uuid",
+          "nullable": false,
+          "fk": {
+            "ref": "plan.id",
+            "on_delete": "cascade"
+          }
+        },
+        "feature_flag": {
+          "type": "text",
+          "nullable": false,
+          "description": "chave do recurso"
+        },
+        "limit_value": {
+          "type": "numeric",
+          "nullable": true
+        },
+        "enabled": {
+          "type": "boolean",
+          "nullable": false,
+          "default": true
+        },
+        "created_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        }
+      },
+      "indexes": [
+        {
+          "name": "ix_entitlement_plan",
+          "columns": [
+            "plan_id"
+          ]
+        },
+        {
+          "name": "ux_entitlement_flag",
+          "unique": true,
+          "columns": [
+            "plan_id",
+            "feature_flag"
+          ]
+        }
+      ]
+    },
+    "organization": {
+      "table": "organization",
+      "description": "Empresa do cliente.",
+      "rls": {
+        "enabled": false,
+        "policy": "root (sem org_id)"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "type": "text",
+          "nullable": false,
+          "length": "2..120"
+        },
+        "country_iso": {
+          "type": "char(2)",
+          "nullable": false,
+          "description": "ISO 3166-1 alpha-2"
+        },
+        "segment_code": {
+          "type": "text",
+          "nullable": false
+        },
+        "size_bucket": {
+          "type": "text",
+          "nullable": false,
+          "examples": [
+            "1-10",
+            "11-50",
+            "51-200",
+            "201-1000",
+            "1001+"
+          ]
+        },
+        "mission": {
+          "type": "text",
+          "nullable": true,
+          "maxlen": 360
+        },
+        "vision": {
+          "type": "text",
+          "nullable": true,
+          "maxlen": 360
+        },
+        "created_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        },
+        "updated_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        }
+      },
+      "indexes": [
+        {
+          "name": "ix_org_name",
+          "columns": [
+            "name"
+          ]
+        }
+      ]
+    },
+    "tenant": {
+      "table": "tenant",
+      "description": "Tenant de aplicação para a organização (multi-tenant).",
+      "rls": {
+        "enabled": false,
+        "policy": "root; filhas usam org_id"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "type": "uuid",
+          "nullable": false,
+          "fk": {
+            "ref": "organization.id",
+            "on_delete": "cascade"
+          }
+        },
+        "plan_id": {
+          "type": "uuid",
+          "nullable": false,
+          "fk": {
+            "ref": "plan.id"
+          }
+        },
+        "timezone": {
+          "type": "text",
+          "nullable": false,
+          "description": "IANA TZ ex.: America/Sao_Paulo"
+        },
+        "currency": {
+          "type": "char(3)",
+          "nullable": false,
+          "description": "ISO 4217"
+        },
+        "locale": {
+          "type": "text",
+          "nullable": false,
+          "description": "ex.: pt-BR"
+        },
+        "status": {
+          "type": "text",
+          "nullable": false,
+          "examples": [
+            "active",
+            "suspended"
+          ]
+        },
+        "created_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        },
+        "updated_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        }
+      },
+      "indexes": [
+        {
+          "name": "ix_tenant_org",
+          "columns": [
+            "org_id"
+          ]
+        }
+      ]
+    },
+    "subscription": {
+      "table": "subscription",
+      "description": "Assinatura Stripe vinculada ao tenant.",
+      "rls": {
+        "enabled": true,
+        "policy": "org_id"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "tenant.id",
+            "on_delete": "cascade"
+          }
+        },
+        "org_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "organization.id",
+            "on_delete": "cascade"
+          }
+        },
+        "stripe_customer_id": {
+          "type": "text",
+          "nullable": false
+        },
+        "stripe_subscription_id": {
+          "type": "text",
+          "nullable": false
+        },
+        "status": {
+          "type": "text",
+          "enum": "subscription_status",
+          "nullable": false
+        },
+        "current_period_end": {
+          "type": "timestamptz",
+          "nullable": true
+        },
+        "created_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        },
+        "updated_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        }
+      },
+      "indexes": [
+        {
+          "name": "ux_sub_stripe",
+          "unique": true,
+          "columns": [
+            "stripe_subscription_id"
+          ]
+        },
+        {
+          "name": "ix_sub_org",
+          "columns": [
+            "org_id"
+          ]
+        }
+      ]
+    },
+    "user_role": {
+      "table": "user_role",
+      "description": "Relação usuário↔organização com papel.",
+      "rls": {
+        "enabled": true,
+        "policy": "org_id"
+      },
+      "primary_key": [
+        "user_id",
+        "org_id"
+      ],
+      "columns": {
+        "user_id": {
+          "type": "uuid",
+          "nullable": false
+        },
+        "org_id": {
+          "type": "uuid",
+          "nullable": false,
+          "fk": {
+            "ref": "organization.id",
+            "on_delete": "cascade"
+          }
+        },
+        "role": {
+          "type": "text",
+          "nullable": false,
+          "examples": [
+            "ORG_OWNER",
+            "MANAGER",
+            "CONTRIBUTOR",
+            "VIEWER",
+            "DATA_ADMIN"
+          ]
+        },
+        "created_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        }
+      },
+      "indexes": [
+        {
+          "name": "ix_user_role_user",
+          "columns": [
+            "user_id"
+          ]
+        }
+      ]
+    },
+    "objective": {
+      "table": "objective",
+      "description": "Objetivo estratégico.",
+      "rls": {
+        "enabled": true,
+        "policy": "org_id"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "organization.id"
+          }
+        },
+        "team_id": {
+          "type": "uuid",
+          "nullable": true
+        },
+        "title": {
+          "type": "text",
+          "nullable": false
+        },
+        "description": {
+          "type": "text",
+          "nullable": false
+        },
+        "cadence": {
+          "type": "text",
+          "enum": "cadence",
+          "nullable": false
+        },
+        "start_date": {
+          "type": "date",
+          "nullable": false
+        },
+        "end_date": {
+          "type": "date",
+          "nullable": false
+        },
+        "status": {
+          "type": "text",
+          "enum": "objective_status",
+          "nullable": false,
+          "default": "DRAFT"
+        },
+        "created_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        },
+        "updated_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        }
+      },
+      "indexes": [
+        {
+          "name": "ix_objective_org",
+          "columns": [
+            "org_id"
+          ]
+        },
+        {
+          "name": "ux_objective_title_scope",
+          "unique": true,
+          "columns": [
+            "org_id",
+            "team_id",
+            "title",
+            "start_date",
+            "end_date"
+          ]
+        }
+      ]
+    },
+    "objective_segment_axis": {
+      "table": "objective_segment_axis",
+      "description": "Eixos de segmentação definidos no objetivo.",
+      "rls": {
+        "enabled": true,
+        "policy": "via objective.org_id (FK)"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "default": "gen_random_uuid()"
+        },
+        "objective_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "objective.id",
+            "on_delete": "cascade"
+          }
+        },
+        "label": {
+          "type": "text",
+          "nullable": false
+        },
+        "code": {
+          "type": "text",
+          "nullable": false,
+          "description": "slug estável do eixo"
+        }
+      },
+      "indexes": [
+        {
+          "name": "ux_obj_axis_code",
+          "unique": true,
+          "columns": [
+            "objective_id",
+            "code"
+          ]
+        }
+      ]
+    },
+    "objective_segment_value": {
+      "table": "objective_segment_value",
+      "description": "Valores possíveis por eixo do objetivo.",
+      "rls": {
+        "enabled": true,
+        "policy": "via objective.org_id (FK em cascade)"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "default": "gen_random_uuid()"
+        },
+        "axis_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "objective_segment_axis.id",
+            "on_delete": "cascade"
+          }
+        },
+        "value": {
+          "type": "text",
+          "nullable": false
+        },
+        "code": {
+          "type": "text",
+          "nullable": false,
+          "description": "slug estável do valor"
+        }
+      },
+      "indexes": [
+        {
+          "name": "ux_obj_axis_value_code",
+          "unique": true,
+          "columns": [
+            "axis_id",
+            "code"
+          ]
+        }
+      ]
+    },
+    "indicator_definition": {
+      "table": "indicator_definition",
+      "description": "Definição de indicador (KR/KPI).",
+      "rls": {
+        "enabled": true,
+        "policy": "org_id"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "organization.id"
+          }
+        },
+        "objective_id": {
+          "type": "uuid",
+          "nullable": true,
+          "fk": {
+            "ref": "objective.id",
+            "on_delete": "set null"
+          }
+        },
+        "type": {
+          "type": "text",
+          "enum": "indicator_type",
+          "nullable": false
+        },
+        "title": {
+          "type": "text",
+          "nullable": false
+        },
+        "description": {
+          "type": "text",
+          "nullable": false
+        },
+        "cadence": {
+          "type": "text",
+          "enum": "cadence",
+          "nullable": false
+        },
+        "unit_code": {
+          "type": "text",
+          "nullable": false,
+          "examples": [
+            "%",
+            "BRL",
+            "USD",
+            "#",
+            "HOURS",
+            "SCORE",
+            "CUSTOM"
+          ]
+        },
+        "unit_custom": {
+          "type": "text",
+          "nullable": true
+        },
+        "direction": {
+          "type": "text",
+          "enum": "direction",
+          "nullable": false
+        },
+        "start_date": {
+          "type": "date",
+          "nullable": false
+        },
+        "end_date": {
+          "type": "date",
+          "nullable": false
+        },
+        "status": {
+          "type": "text",
+          "enum": "indicator_status",
+          "default": "DRAFT"
+        },
+        "created_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        },
+        "updated_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        }
+      },
+      "indexes": [
+        {
+          "name": "ix_indicator_org",
+          "columns": [
+            "org_id"
+          ]
+        },
+        {
+          "name": "ix_indicator_objective",
+          "columns": [
+            "objective_id"
+          ]
+        }
+      ]
+    },
+    "indicator_target": {
+      "table": "indicator_target",
+      "description": "Metas/tolerâncias por indicador (global ou por período).",
+      "rls": {
+        "enabled": true,
+        "policy": "via indicator_definition.org_id"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "default": "gen_random_uuid()"
+        },
+        "indicator_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "indicator_definition.id",
+            "on_delete": "cascade"
+          }
+        },
+        "period_start": {
+          "type": "date",
+          "nullable": true,
+          "description": "null = meta global"
+        },
+        "target_value": {
+          "type": "numeric",
+          "nullable": false
+        },
+        "tolerance": {
+          "type": "numeric",
+          "nullable": true,
+          "range": "0..1"
+        },
+        "baseline": {
+          "type": "numeric",
+          "nullable": true
+        }
+      },
+      "indexes": [
+        {
+          "name": "ux_target_indicator_period",
+          "unique": true,
+          "columns": [
+            "indicator_id",
+            "period_start"
+          ]
+        }
+      ]
+    },
+    "indicator_segment_axis": {
+      "table": "indicator_segment_axis",
+      "description": "Eixos de segmentação do indicador.",
+      "rls": {
+        "enabled": true,
+        "policy": "via indicator_definition.org_id"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "default": "gen_random_uuid()"
+        },
+        "indicator_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "indicator_definition.id",
+            "on_delete": "cascade"
+          }
+        },
+        "label": {
+          "type": "text",
+          "nullable": false
+        },
+        "code": {
+          "type": "text",
+          "nullable": false
+        }
+      },
+      "indexes": [
+        {
+          "name": "ux_indicator_axis_code",
+          "unique": true,
+          "columns": [
+            "indicator_id",
+            "code"
+          ]
+        }
+      ]
+    },
+    "indicator_segment_value": {
+      "table": "indicator_segment_value",
+      "description": "Valores possíveis por eixo do indicador.",
+      "rls": {
+        "enabled": true,
+        "policy": "via indicator_definition.org_id"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "default": "gen_random_uuid()"
+        },
+        "axis_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "indicator_segment_axis.id",
+            "on_delete": "cascade"
+          }
+        },
+        "value": {
+          "type": "text",
+          "nullable": false
+        },
+        "code": {
+          "type": "text",
+          "nullable": false
+        }
+      },
+      "indexes": [
+        {
+          "name": "ux_indicator_axis_value_code",
+          "unique": true,
+          "columns": [
+            "axis_id",
+            "code"
+          ]
+        }
+      ]
+    },
+    "indicator_source_binding": {
+      "table": "indicator_source_binding",
+      "description": "Vínculo técnico do indicador à origem (Agent ou conector RO).",
+      "rls": {
+        "enabled": true,
+        "policy": "via indicator_definition.org_id"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "default": "gen_random_uuid()"
+        },
+        "indicator_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "indicator_definition.id",
+            "on_delete": "cascade"
+          }
+        },
+        "mode": {
+          "type": "text",
+          "nullable": false,
+          "examples": [
+            "AGENT",
+            "CONNECTOR"
+          ]
+        },
+        "source_ref": {
+          "type": "text",
+          "nullable": false,
+          "description": "ex.: bigquery://project.dataset.table ou jdbc://..."
+        },
+        "query_or_params_json": {
+          "type": "jsonb",
+          "nullable": true,
+          "description": "query parametrizada ou parâmetros de job"
+        },
+        "validations_json": {
+          "type": "jsonb",
+          "nullable": true,
+          "description": "regras L1/L2 de qualidade"
+        },
+        "created_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        },
+        "updated_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        }
+      },
+      "indexes": [
+        {
+          "name": "ix_source_indicator",
+          "columns": [
+            "indicator_id"
+          ]
+        }
+      ]
+    },
+    "indicator_value": {
+      "table": "indicator_value",
+      "description": "Série temporal de valores agregados (última milha).",
+      "rls": {
+        "enabled": true,
+        "policy": "org_id"
+      },
+      "partitioning": {
+        "type": "RANGE",
+        "column": "period_start",
+        "interval": "MONTH"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "organization.id"
+          }
+        },
+        "indicator_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "indicator_definition.id",
+            "on_delete": "cascade"
+          }
+        },
+        "period_start": {
+          "type": "date",
+          "nullable": false,
+          "description": "início do período em UTC"
+        },
+        "granularity": {
+          "type": "text",
+          "enum": "cadence",
+          "nullable": false
+        },
+        "segment_key": {
+          "type": "jsonb",
+          "nullable": true,
+          "description": "JSON canônico {Eixo: Valor}"
+        },
+        "value": {
+          "type": "numeric",
+          "nullable": false
+        },
+        "status_calc": {
+          "type": "text",
+          "enum": "value_status_calc",
+          "nullable": false
+        },
+        "collected_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        },
+        "origin": {
+          "type": "text",
+          "nullable": false,
+          "examples": [
+            "AGENT",
+            "CONNECTOR"
+          ]
+        },
+        "version": {
+          "type": "int",
+          "default": 1
+        },
+        "batch_id": {
+          "type": "uuid",
+          "nullable": false
+        },
+        "checksum": {
+          "type": "text",
+          "nullable": false
+        }
+      },
+      "uniques": [
+        {
+          "name": "ux_indicator_period_segment_version",
+          "columns": [
+            "indicator_id",
+            "period_start",
+            "segment_key",
+            "version"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_indicator_value_lookup",
+          "columns": [
+            "org_id",
+            "indicator_id",
+            "period_start"
+          ]
+        },
+        {
+          "name": "ix_indicator_value_segment_gin",
+          "using": "GIN",
+          "columns": [
+            "segment_key"
+          ]
+        }
+      ]
+    },
+    "agent": {
+      "table": "agent",
+      "description": "Agente on‑prem/VPC do cliente.",
+      "rls": {
+        "enabled": true,
+        "policy": "org_id"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "organization.id"
+          }
+        },
+        "name": {
+          "type": "text",
+          "nullable": false
+        },
+        "version": {
+          "type": "text",
+          "nullable": false
+        },
+        "status": {
+          "type": "text",
+          "enum": "agent_status",
+          "nullable": false
+        },
+        "last_seen_at": {
+          "type": "timestamptz",
+          "nullable": true
+        },
+        "created_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        }
+      },
+      "indexes": [
+        {
+          "name": "ix_agent_org",
+          "columns": [
+            "org_id"
+          ]
+        }
+      ]
+    },
+    "agent_job": {
+      "table": "agent_job",
+      "description": "Execuções de coleta/ingestão pelo Agent.",
+      "rls": {
+        "enabled": true,
+        "policy": "via agent.org_id"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "default": "gen_random_uuid()"
+        },
+        "agent_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "agent.id",
+            "on_delete": "cascade"
+          }
+        },
+        "indicator_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "indicator_definition.id",
+            "on_delete": "set null"
+          },
+          "nullable": true
+        },
+        "window": {
+          "type": "text",
+          "nullable": false,
+          "description": "janela processada, ex.: 2026-01..2026-03"
+        },
+        "status": {
+          "type": "text",
+          "enum": "job_status",
+          "nullable": false
+        },
+        "started_at": {
+          "type": "timestamptz",
+          "nullable": true
+        },
+        "finished_at": {
+          "type": "timestamptz",
+          "nullable": true
+        },
+        "stats_json": {
+          "type": "jsonb",
+          "nullable": true
+        }
+      },
+      "indexes": [
+        {
+          "name": "ix_agent_job_agent",
+          "columns": [
+            "agent_id"
+          ]
+        }
+      ]
+    },
+    "data_transfer_batch": {
+      "table": "data_transfer_batch",
+      "description": "Lotes de ingestão recebidos do Agent.",
+      "rls": {
+        "enabled": true,
+        "policy": "via agent.org_id (FK transitiva)"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "description": "batch_id (do cabeçalho)"
+        },
+        "agent_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "agent.id",
+            "on_delete": "cascade"
+          }
+        },
+        "indicator_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "indicator_definition.id"
+          }
+        },
+        "period_start": {
+          "type": "date",
+          "nullable": false
+        },
+        "checksum": {
+          "type": "text",
+          "nullable": false
+        },
+        "read_rows": {
+          "type": "int",
+          "nullable": false
+        },
+        "agg_rows": {
+          "type": "int",
+          "nullable": false
+        },
+        "received_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        }
+      },
+      "indexes": [
+        {
+          "name": "ux_batch_unique",
+          "unique": true,
+          "columns": [
+            "id"
+          ]
+        },
+        {
+          "name": "ix_batch_indicator_period",
+          "columns": [
+            "indicator_id",
+            "period_start"
+          ]
+        }
+      ]
+    },
+    "connector": {
+      "table": "connector",
+      "description": "Conectores RO (Free/Pro) configurados no SaaS para ler DW/Datalake do cliente.",
+      "rls": {
+        "enabled": true,
+        "policy": "org_id"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "organization.id"
+          }
+        },
+        "type": {
+          "type": "text",
+          "nullable": false,
+          "examples": [
+            "BIGQUERY",
+            "SNOWFLAKE",
+            "REDSHIFT",
+            "DATABRICKS",
+            "POSTGRES",
+            "SQLSERVER"
+          ]
+        },
+        "name": {
+          "type": "text",
+          "nullable": false
+        },
+        "secret_ref": {
+          "type": "text",
+          "nullable": false,
+          "description": "referência no cofre (KMS/SM)"
+        },
+        "created_by": {
+          "type": "uuid",
+          "nullable": true
+        },
+        "created_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        }
+      },
+      "indexes": [
+        {
+          "name": "ix_connector_org",
+          "columns": [
+            "org_id"
+          ]
+        }
+      ]
+    },
+    "checkin": {
+      "table": "checkin",
+      "description": "Registros de rituais de acompanhamento.",
+      "rls": {
+        "enabled": true,
+        "policy": "org_id"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "organization.id"
+          }
+        },
+        "objective_id": {
+          "type": "uuid",
+          "nullable": true,
+          "fk": {
+            "ref": "objective.id",
+            "on_delete": "set null"
+          }
+        },
+        "indicator_id": {
+          "type": "uuid",
+          "nullable": true,
+          "fk": {
+            "ref": "indicator_definition.id",
+            "on_delete": "set null"
+          }
+        },
+        "period_start": {
+          "type": "date",
+          "nullable": false
+        },
+        "status": {
+          "type": "text",
+          "enum": "checkin_status",
+          "nullable": false
+        },
+        "notes": {
+          "type": "text",
+          "nullable": true
+        },
+        "attachments": {
+          "type": "jsonb",
+          "nullable": true
+        },
+        "created_by": {
+          "type": "uuid",
+          "nullable": false
+        },
+        "created_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        }
+      },
+      "indexes": [
+        {
+          "name": "ix_checkin_entity_period",
+          "columns": [
+            "org_id",
+            "objective_id",
+            "indicator_id",
+            "period_start"
+          ]
+        }
+      ]
+    },
+    "alert": {
+      "table": "alert",
+      "description": "Alertas operacionais (desvio, staleness, falhas).",
+      "rls": {
+        "enabled": true,
+        "policy": "org_id"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "organization.id"
+          }
+        },
+        "entity": {
+          "type": "text",
+          "nullable": false,
+          "examples": [
+            "OBJECTIVE",
+            "INDICATOR",
+            "INGESTION"
+          ]
+        },
+        "entity_id": {
+          "type": "uuid",
+          "nullable": true
+        },
+        "type": {
+          "type": "text",
+          "enum": "alert_type",
+          "nullable": false
+        },
+        "severity": {
+          "type": "text",
+          "enum": "alert_severity",
+          "nullable": false
+        },
+        "message": {
+          "type": "text",
+          "nullable": true
+        },
+        "created_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        },
+        "resolved_at": {
+          "type": "timestamptz",
+          "nullable": true
+        }
+      },
+      "indexes": [
+        {
+          "name": "ix_alert_org",
+          "columns": [
+            "org_id"
+          ]
+        }
+      ]
+    },
+    "audit_log": {
+      "table": "audit_log",
+      "description": "Trilha de auditoria de alterações.",
+      "rls": {
+        "enabled": true,
+        "policy": "org_id"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "organization.id"
+          }
+        },
+        "entity": {
+          "type": "text",
+          "nullable": false
+        },
+        "entity_id": {
+          "type": "uuid",
+          "nullable": false
+        },
+        "action": {
+          "type": "text",
+          "nullable": false,
+          "examples": [
+            "CREATE",
+            "UPDATE",
+            "DELETE"
+          ]
+        },
+        "before_json": {
+          "type": "jsonb",
+          "nullable": true
+        },
+        "after_json": {
+          "type": "jsonb",
+          "nullable": true
+        },
+        "actor_id": {
+          "type": "uuid",
+          "nullable": true
+        },
+        "created_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        }
+      },
+      "indexes": [
+        {
+          "name": "ix_audit_entity",
+          "columns": [
+            "org_id",
+            "entity",
+            "entity_id"
+          ]
+        }
+      ]
+    },
+    "telemetry_event": {
+      "table": "telemetry_event",
+      "description": "Telemetria de uso (funis de wizard, etc.).",
+      "rls": {
+        "enabled": true,
+        "policy": "org_id"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "organization.id"
+          }
+        },
+        "name": {
+          "type": "text",
+          "nullable": false
+        },
+        "session_id": {
+          "type": "uuid",
+          "nullable": true
+        },
+        "user_id": {
+          "type": "uuid",
+          "nullable": true
+        },
+        "step": {
+          "type": "text",
+          "nullable": true
+        },
+        "meta_json": {
+          "type": "jsonb",
+          "nullable": true
+        },
+        "ts": {
+          "type": "timestamptz",
+          "default": "now()"
+        }
+      },
+      "indexes": [
+        {
+          "name": "ix_telemetry_org",
+          "columns": [
+            "org_id",
+            "name",
+            "ts"
+          ]
+        }
+      ]
+    },
+    "lead": {
+      "table": "lead",
+      "description": "Lead/contato de marketing (HubSpot).",
+      "rls": {
+        "enabled": false,
+        "policy": "tabela global; pode ter org_id quando convertido"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "type": "uuid",
+          "nullable": true,
+          "fk": {
+            "ref": "organization.id"
+          }
+        },
+        "hubspot_id": {
+          "type": "text",
+          "nullable": true
+        },
+        "email": {
+          "type": "text",
+          "nullable": true
+        },
+        "source": {
+          "type": "text",
+          "nullable": true
+        },
+        "lifecycle_stage": {
+          "type": "text",
+          "nullable": true
+        },
+        "metadata_json": {
+          "type": "jsonb",
+          "nullable": true
+        },
+        "created_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        },
+        "updated_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        }
+      },
+      "indexes": [
+        {
+          "name": "ix_lead_hubspot",
+          "columns": [
+            "hubspot_id"
+          ]
+        }
+      ]
+    },
+    "webhook_event": {
+      "table": "webhook_event",
+      "description": "Eventos recebidos (Stripe/HubSpot) para idempotência e reprocesso.",
+      "rls": {
+        "enabled": false,
+        "policy": "global"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "text",
+          "description": "event.id do provedor"
+        },
+        "provider": {
+          "type": "text",
+          "nullable": false,
+          "examples": [
+            "stripe",
+            "hubspot"
+          ]
+        },
+        "payload": {
+          "type": "jsonb",
+          "nullable": false
+        },
+        "received_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        },
+        "processed_at": {
+          "type": "timestamptz",
+          "nullable": true
+        }
+      },
+      "indexes": [
+        {
+          "name": "ux_webhook_provider_id",
+          "unique": true,
+          "columns": [
+            "provider",
+            "id"
+          ]
+        }
+      ]
+    },
+    "quota_usage": {
+      "table": "quota_usage",
+      "description": "Controle de consumo/limites por tenant.",
+      "rls": {
+        "enabled": true,
+        "policy": "org_id"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "tenant.id",
+            "on_delete": "cascade"
+          }
+        },
+        "org_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "organization.id"
+          }
+        },
+        "metric": {
+          "type": "text",
+          "nullable": false,
+          "examples": [
+            "indicators.count",
+            "alerts.per_day"
+          ]
+        },
+        "period_ref": {
+          "type": "text",
+          "nullable": false,
+          "description": "ex.: 2026-01"
+        },
+        "value_used": {
+          "type": "numeric",
+          "nullable": false
+        },
+        "limit_value": {
+          "type": "numeric",
+          "nullable": true
+        },
+        "updated_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        }
+      },
+      "indexes": [
+        {
+          "name": "ux_quota_tenant_metric",
+          "unique": true,
+          "columns": [
+            "tenant_id",
+            "metric",
+            "period_ref"
+          ]
+        }
+      ]
+    },
+    "mcp_client_app": {
+      "table": "mcp_client_app",
+      "description": "Aplicativos clientes autorizados a usar MCP.",
+      "rls": {
+        "enabled": true,
+        "policy": "org_id"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "organization.id"
+          }
+        },
+        "name": {
+          "type": "text",
+          "nullable": false
+        },
+        "allowlisted_tools": {
+          "type": "text[]",
+          "nullable": true
+        },
+        "created_by": {
+          "type": "uuid",
+          "nullable": true
+        },
+        "created_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        }
+      },
+      "indexes": [
+        {
+          "name": "ix_mcp_app_org",
+          "columns": [
+            "org_id"
+          ]
+        }
+      ]
+    },
+    "mcp_token": {
+      "table": "mcp_token",
+      "description": "Tokens de acesso MCP emitidos por app/tenant.",
+      "rls": {
+        "enabled": true,
+        "policy": "org_id"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "organization.id"
+          }
+        },
+        "client_app_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "mcp_client_app.id",
+            "on_delete": "cascade"
+          }
+        },
+        "scopes": {
+          "type": "text[]",
+          "nullable": false
+        },
+        "exp": {
+          "type": "timestamptz",
+          "nullable": false
+        },
+        "status": {
+          "type": "text",
+          "nullable": false,
+          "examples": [
+            "active",
+            "revoked"
+          ]
+        },
+        "created_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        }
+      },
+      "indexes": [
+        {
+          "name": "ix_mcp_token_app",
+          "columns": [
+            "client_app_id"
+          ]
+        }
+      ]
+    },
+    "mcp_tool_invocation_log": {
+      "table": "mcp_tool_invocation_log",
+      "description": "Logs de chamadas MCP (observabilidade/auditoria).",
+      "rls": {
+        "enabled": true,
+        "policy": "org_id"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "type": "uuid",
+          "fk": {
+            "ref": "organization.id"
+          }
+        },
+        "tool": {
+          "type": "text",
+          "nullable": false
+        },
+        "args_redacted": {
+          "type": "jsonb",
+          "nullable": true
+        },
+        "actor": {
+          "type": "text",
+          "nullable": true
+        },
+        "duration_ms": {
+          "type": "int",
+          "nullable": true
+        },
+        "outcome": {
+          "type": "text",
+          "nullable": false,
+          "examples": [
+            "OK",
+            "ERROR",
+            "RATE_LIMITED"
+          ]
+        },
+        "ts": {
+          "type": "timestamptz",
+          "default": "now()"
+        }
+      },
+      "indexes": [
+        {
+          "name": "ix_mcp_log_org_tool",
+          "columns": [
+            "org_id",
+            "tool",
+            "ts"
+          ]
+        }
+      ]
+    },
+    "wizard_session": {
+      "table": "wizard_session",
+      "description": "Sessões de wizard (onboarding, objetivo, KR, KPI) para autosave/retomada.",
+      "rls": {
+        "enabled": true,
+        "policy": "org_id (quando aplicável)"
+      },
+      "primary_key": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "type": "uuid",
+          "nullable": true,
+          "fk": {
+            "ref": "organization.id"
+          }
+        },
+        "user_id": {
+          "type": "uuid",
+          "nullable": false
+        },
+        "type": {
+          "type": "text",
+          "enum": "wizard_type",
+          "nullable": false
+        },
+        "step": {
+          "type": "int",
+          "nullable": false,
+          "default": 0
+        },
+        "payload_json": {
+          "type": "jsonb",
+          "nullable": true
+        },
+        "status": {
+          "type": "text",
+          "nullable": false,
+          "examples": [
+            "ACTIVE",
+            "COMPLETED",
+            "ABANDONED"
+          ]
+        },
+        "updated_at": {
+          "type": "timestamptz",
+          "default": "now()"
+        }
+      },
+      "indexes": [
+        {
+          "name": "ix_wizard_user",
+          "columns": [
+            "user_id",
+            "type",
+            "status"
+          ]
+        }
+      ]
+    }
+  },
+  "views": {
+    "mv_indicator_last_version": {
+      "type": "materialized_view",
+      "description": "Última versão por (indicator_id, period_start, segment_key).",
+      "columns": {
+        "org_id": {
+          "type": "uuid"
+        },
+        "indicator_id": {
+          "type": "uuid"
+        },
+        "period_start": {
+          "type": "date"
+        },
+        "segment_key": {
+          "type": "jsonb"
+        },
+        "version": {
+          "type": "int"
+        },
+        "value": {
+          "type": "numeric"
+        },
+        "status_calc": {
+          "type": "text"
+        }
+      },
+      "refresh_policy": "on_demand (ou schedule noturno)",
+      "indexes": [
+        {
+          "name": "ix_mv_indicator_period",
+          "columns": [
+            "org_id",
+            "indicator_id",
+            "period_start"
+          ]
+        }
+      ]
+    }
+  },
+  "rls_policies": {
+    "org_isolation": {
+      "description": "Isolamento por organização para tabelas com org_id.",
+      "using": "org_id = current_setting('app.current_org_id')::uuid",
+      "with_check": "org_id = current_setting('app.current_org_id')::uuid",
+      "force_rls": true
+    }
+  }
+}

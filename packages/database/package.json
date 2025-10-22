@@ -1,0 +1,27 @@
+{
+  "name": "@datainova/database",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "dev": "tsc --watch --project tsconfig.json",
+    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.9.1"
+  },
+  "devDependencies": {
+    "prisma": "^5.9.1",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}

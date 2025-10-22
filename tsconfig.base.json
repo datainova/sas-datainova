@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "allowJs": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "useDefineForClassFields": true,
+    "baseUrl": ".",
+    "paths": {
+      "@datainova/common/*": [
+        "packages/common/src/*"
+      ],
+      "@datainova/config": [
+        "packages/config/src/index.ts"
+      ],
+      "@datainova/database": [
+        "packages/database/src/index.ts"
+      ],
+      "@datainova/database/*": [
+        "packages/database/src/*"
+      ],
+      "@datainova/prisma": [
+        "packages/database/src/index.ts"
+      ]
+    }
+  },
+  "include": [
+    "packages",
+    "apps"
+  ]
+}

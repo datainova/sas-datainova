@@ -1,0 +1,481 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Agent {
+  id                String              @id
+  orgId             String
+  tenantId          String
+  name              String
+  status            AgentStatus         @default(ACTIVE)
+  version           String
+  lastSeenAt        DateTime?
+  createdAt         DateTime            @default(now())
+  Organization      Organization        @relation(fields: [orgId], references: [id])
+  Tenant            Tenant              @relation(fields: [tenantId], references: [id])
+  AgentJob          AgentJob[]
+  DataTransferBatch DataTransferBatch[]
+}
+
+model AgentJob {
+  id                  String              @id
+  agentId             String
+  indicatorId         String
+  window              String
+  status              String
+  startedAt           DateTime
+  finishedAt          DateTime?
+  stats               Json?
+  Agent               Agent               @relation(fields: [agentId], references: [id])
+  IndicatorDefinition IndicatorDefinition @relation(fields: [indicatorId], references: [id])
+}
+
+model Alert {
+  id                  String               @id
+  orgId               String
+  indicatorId         String?
+  entity              String
+  entityId            String
+  type                String
+  severity            String
+  createdAt           DateTime             @default(now())
+  resolvedAt          DateTime?
+  IndicatorDefinition IndicatorDefinition? @relation(fields: [indicatorId], references: [id])
+  Organization        Organization         @relation(fields: [orgId], references: [id])
+}
+
+model AuditLog {
+  id           String       @id
+  orgId        String
+  entity       String
+  entityId     String
+  action       String
+  before       Json?
+  after        Json?
+  actorId      String?
+  createdAt    DateTime     @default(now())
+  Organization Organization @relation(fields: [orgId], references: [id])
+}
+
+model AuthLoginAttempt {
+  id        String   @id
+  email     String
+  ipAddress String?  @db.Inet
+  userAgent String?
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([email, createdAt])
+}
+
+model AuthOidcSession {
+  id           String    @id
+  provider     String
+  stateHash    String    @unique
+  codeVerifier String
+  redirectUri  String?
+  expiresAt    DateTime
+  usedAt       DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([expiresAt])
+}
+
+model AuthRefreshToken {
+  id        String    @id
+  userId    String
+  tokenHash String    @unique
+  issuedAt  DateTime  @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+  userAgent String?
+  ipAddress String?   @db.Inet
+  User      User      @relation(fields: [userId], references: [id])
+
+  @@index([expiresAt])
+  @@index([userId])
+}
+
+model AuthResetToken {
+  id        String    @id
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  User      User      @relation(fields: [userId], references: [id])
+
+  @@index([expiresAt])
+  @@index([userId])
+}
+
+model AuthSignupToken {
+  id        String    @id
+  email     String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([email])
+  @@index([expiresAt])
+}
+
+model Checkin {
+  id                  String               @id
+  orgId               String
+  objectiveId         String
+  indicatorId         String?
+  cadence             String
+  status              String
+  notes               String?
+  learnings           String?
+  createdAt           DateTime             @default(now())
+  IndicatorDefinition IndicatorDefinition? @relation(fields: [indicatorId], references: [id])
+  Objective           Objective            @relation(fields: [objectiveId], references: [id])
+  Organization        Organization         @relation(fields: [orgId], references: [id])
+}
+
+model DataTransferBatch {
+  id                  String              @id
+  agentId             String
+  indicatorId         String
+  period              String
+  checksum            String
+  readRows            Int
+  aggregatedRows      Int
+  receivedAt          DateTime            @default(now())
+  Agent               Agent               @relation(fields: [agentId], references: [id])
+  IndicatorDefinition IndicatorDefinition @relation(fields: [indicatorId], references: [id])
+  IndicatorValue      IndicatorValue?
+}
+
+model Entitlement {
+  id      String  @id
+  planId  String
+  feature String
+  limit   Int?
+  enabled Boolean @default(true)
+  Plan    Plan    @relation(fields: [planId], references: [id])
+}
+
+model IndicatorDefinition {
+  id                     String                   @id
+  orgId                  String
+  objectiveId            String?
+  type                   IndicatorType
+  title                  String
+  description            String
+  cadence                Cadence
+  unitCode               String
+  unitCustom             String?
+  direction              IndicatorDirection
+  startDate              DateTime
+  endDate                DateTime
+  status                 String
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime
+  AgentJob               AgentJob[]
+  Alert                  Alert[]
+  Checkin                Checkin[]
+  DataTransferBatch      DataTransferBatch[]
+  Objective              Objective?               @relation(fields: [objectiveId], references: [id])
+  Organization           Organization             @relation(fields: [orgId], references: [id])
+  IndicatorSegmentAxis   IndicatorSegmentAxis[]
+  IndicatorSourceBinding IndicatorSourceBinding[]
+  IndicatorTarget        IndicatorTarget[]
+  IndicatorValue         IndicatorValue[]
+}
+
+model IndicatorSegmentAxis {
+  id                    String                  @id
+  indicatorId           String
+  label                 String
+  code                  String
+  IndicatorDefinition   IndicatorDefinition     @relation(fields: [indicatorId], references: [id])
+  IndicatorSegmentValue IndicatorSegmentValue[]
+}
+
+model IndicatorSegmentValue {
+  id                   String               @id
+  axisId               String
+  value                String
+  code                 String
+  IndicatorSegmentAxis IndicatorSegmentAxis @relation(fields: [axisId], references: [id])
+}
+
+model IndicatorSourceBinding {
+  id                  String              @id
+  indicatorId         String
+  mode                String
+  sourceRef           String
+  params              Json
+  validations         Json?
+  IndicatorDefinition IndicatorDefinition @relation(fields: [indicatorId], references: [id])
+}
+
+model IndicatorTarget {
+  id                  String              @id
+  indicatorId         String
+  period              String?
+  targetValue         Float
+  tolerance           Float?
+  baseline            Float?
+  createdAt           DateTime            @default(now())
+  IndicatorDefinition IndicatorDefinition @relation(fields: [indicatorId], references: [id])
+}
+
+model IndicatorValue {
+  id                  String              @id
+  indicatorId         String
+  period              String
+  segmentKey          String?
+  value               Float
+  statusCalc          IndicatorStatusCalc
+  collectedAt         DateTime            @default(now())
+  origin              IndicatorOrigin
+  version             Int                 @default(1)
+  createdAt           DateTime            @default(now())
+  batchId             String?             @unique
+  DataTransferBatch   DataTransferBatch?  @relation(fields: [batchId], references: [id])
+  IndicatorDefinition IndicatorDefinition @relation(fields: [indicatorId], references: [id])
+
+  @@index([indicatorId, period])
+}
+
+model Lead {
+  id        String   @id
+  hubspotId String?
+  email     String
+  source    String
+  lifecycle String
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+}
+
+model McpToolInvocationLog {
+  id           String       @id
+  orgId        String
+  tool         String
+  payload      Json
+  durationMs   Int
+  success      Boolean
+  error        String?
+  createdAt    DateTime     @default(now())
+  Organization Organization @relation(fields: [orgId], references: [id])
+}
+
+model Objective {
+  id                   String                 @id
+  orgId                String
+  teamId               String?
+  title                String
+  description          String
+  cadence              Cadence
+  startDate            DateTime
+  endDate              DateTime
+  status               String
+  archivedAt           DateTime?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime
+  Checkin              Checkin[]
+  IndicatorDefinition  IndicatorDefinition[]
+  Organization         Organization           @relation(fields: [orgId], references: [id])
+  Team                 Team?                  @relation(fields: [teamId], references: [id])
+  ObjectiveSegmentAxis ObjectiveSegmentAxis[]
+}
+
+model ObjectiveSegmentAxis {
+  id                    String                  @id
+  objectiveId           String
+  label                 String
+  code                  String
+  Objective             Objective               @relation(fields: [objectiveId], references: [id])
+  ObjectiveSegmentValue ObjectiveSegmentValue[]
+}
+
+model ObjectiveSegmentValue {
+  id                   String               @id
+  axisId               String
+  value                String
+  code                 String
+  ObjectiveSegmentAxis ObjectiveSegmentAxis @relation(fields: [axisId], references: [id])
+}
+
+model OnboardingSession {
+  id        String   @id
+  orgId     String?
+  email     String?
+  data      Json
+  status    String   @default("draft")
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+}
+
+model Organization {
+  id                   String                 @id
+  name                 String
+  countryIso           String
+  segmentCode          String
+  sizeBucket           String
+  mission              String?
+  vision               String?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime
+  Agent                Agent[]
+  Alert                Alert[]
+  AuditLog             AuditLog[]
+  Checkin              Checkin[]
+  IndicatorDefinition  IndicatorDefinition[]
+  McpToolInvocationLog McpToolInvocationLog[]
+  Objective            Objective[]
+  Team                 Team[]
+  Tenant               Tenant[]
+  UserRole             UserRole[]
+}
+
+model Plan {
+  id          String        @id
+  name        PlanName      @unique
+  limits      Json
+  features    Json
+  Entitlement Entitlement[]
+  Tenant      Tenant[]
+}
+
+model Subscription {
+  id                   String   @id
+  tenantId             String   @unique
+  stripeCustomerId     String
+  stripeSubscriptionId String
+  status               String
+  currentPeriodEnd     DateTime
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime
+  Tenant               Tenant   @relation(fields: [tenantId], references: [id])
+}
+
+model Team {
+  id           String       @id
+  orgId        String
+  name         String
+  createdAt    DateTime     @default(now())
+  Objective    Objective[]
+  Organization Organization @relation(fields: [orgId], references: [id])
+}
+
+model TelemetryEvent {
+  id        String   @id
+  orgId     String?
+  name      String
+  sessionId String?
+  userId    String?
+  metadata  Json
+  createdAt DateTime @default(now())
+}
+
+model Tenant {
+  id           String        @id
+  orgId        String
+  planId       String
+  timezone     String
+  currency     String
+  locale       String
+  status       String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime
+  Agent        Agent[]
+  Subscription Subscription?
+  Organization Organization  @relation(fields: [orgId], references: [id])
+  Plan         Plan          @relation(fields: [planId], references: [id])
+}
+
+model User {
+  id               String             @id
+  email            String             @unique
+  passwordHash     String?
+  emailVerifiedAt  DateTime?
+  lastLoginAt      DateTime?
+  status           UserStatus         @default(ACTIVE)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime
+  AuthRefreshToken AuthRefreshToken[]
+  AuthResetToken   AuthResetToken[]
+  UserRole         UserRole[]
+}
+
+model UserRole {
+  id           String       @id
+  userId       String
+  orgId        String
+  role         Role
+  Organization Organization @relation(fields: [orgId], references: [id])
+  User         User         @relation(fields: [userId], references: [id])
+
+  @@unique([userId, orgId])
+  @@index([orgId])
+  @@index([userId])
+}
+
+enum AgentStatus {
+  ACTIVE
+  INACTIVE
+  REVOKED
+}
+
+enum Cadence {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  SEMIANNUAL
+  ANNUAL
+  BIENNIAL
+}
+
+enum IndicatorDirection {
+  INCREASE
+  DECREASE
+  MAINTAIN
+}
+
+enum IndicatorOrigin {
+  AGENT
+  CONNECTOR
+}
+
+enum IndicatorStatusCalc {
+  ON
+  RISK
+  OFF
+}
+
+enum IndicatorType {
+  KR
+  KPI
+}
+
+enum PlanName {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum Role {
+  ORG_OWNER
+  MANAGER
+  CONTRIBUTOR
+  VIEWER
+}
+
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+}

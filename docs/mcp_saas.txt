@@ -1,0 +1,461 @@
+MCP — Documentação Detalhada (DataInova SaaS)
+Especificação completa da 
+integração Model Context Protocol (MCP)
+ do produto. Abrange arquitetura, transporte, autenticação, catálogo de 
+Tools/Resources/Prompts
+, contratos (JSON Schema), segurança, observabilidade, versionamento e exemplos ponta
+a
+ponta.
+0) Objetivo
+Expor as capacidades do SaaS (criar objetivos/KRs/KPIs, consultar valores, orquestrar ingestão via Agent, etc.) como 
+interfaces MCP
+ compatíveis com clientes de IA/assistentes, mantendo 
+mesma autorização/quotas
+ do REST.
+Princípios:
+Paridade de capacidades
+ com REST; nada exclusivo ao MCP.
+Segurança & RLS
+ idênticas à API.
+Contratos tipados
+ (Zod → JSON Schema) e 
+idempotência
+ para operações com efeito colateral.
+Observabilidade total
+ (logs, métricas, traces) e 
+auditoria
+.
+1) Arquitetura
+Componentes:
+MCP Server (Node/TS)
+: roda ao lado da API, exposto em /mcp (HTTP) e 
+stdio
+ (dev).
+Registry
+: registra 
+Tools
+, 
+Resources
+ e 
+Prompts
+ em catálogo, com schemas e metadados.
+Adapter REST
+: mapeia chamadas MCP para 
+serviços de domínio
+ e/ou 
+endpoints REST
+ internos.
+Auth/RBAC
+: reaproveita o middleware da API; tokens com escopos MCP.
+Diagrama (alto nível):
+flowchart LR
+  C[MCP Client] -- JSON-RPC --> S[/MCP Server/]
+  S --> D[Serviços de Domínio]
+  
+S --> A[(PostgreSQL)]
+  S --> CH[(Chroma)]
+  S --> INT[Stripe/HubSpot/Slack]
+  
+S --> REST[API Interna]
+2) Transports & Endpoints
+HTTP (produção):
+ POST /mcp — conteúdo JSON
+RPC 2.0. Respostas podem ser 
+streamed
+ via 
+transfer
+encoding: chunked
+ em tools que suportam progresso.
+stdio (desenvolvimento):
+ processo Node inicia em modo stdio aceitando JSON
+RPC por stdin e emitindo por stdout (útil para 
+inspectors
+ e testes locais).
+Headers (HTTP):
+Authorization: Bearer <McpToken>
+X-Org-Id: <uuid> 
+(opcional; normalmente embutido no token)
+X-Request-Id: <uuid> 
+(opcional; gerado pelo servidor se ausente)
+3) Autenticação, Autorização e Quotas
+3.1 Emissão de tokens
+McpToken
+ emitido pelo backend (rota administrativa) amarrado a 
+org
+ e 
+client app
+:
+Claims: sub, org_id, roles[], plan, scopes: ['tool:kr.create', 'resource:objective:*', ...], exp curto.
+Rotação regular (curto prazo). Opcional 
+client secret
+ por app.
+3.2 RBAC e Entitlements
+Tools/Resources
+ só aparecem em tools/list/resources/list se 
+permitidos
+ pelo plano/role.
+Rate limit
+/quotas por tool (ex.: indicator.values.list n requests/min, kr.create m requests/min) e 
+janelas
+ por tenant.
+3.3 RLS
+Toda execução passa o org_id (do token) ao contexto; as queries executam sob 
+RLS
+ do Postgres.
+4) JSON
+RPC — Métodos
+Suporte mínimo:
+tools/list → catálogo filtrado por auth/entitlements.
+tools/call → invoca uma tool com name e arguments.
+resources/list → URIs disponíveis.
+resources/read → lê conteúdo de um resource.
+prompts/list → prompts disponíveis.
+prompts/get → metadados e 
+template
+ de um prompt.
+Formato base:
+{
+  "jsonrpc": "2.0",
+  "id": "<req-id>",
+  "method": "tools/call",
+  "params": { "name": "kr.create", "arguments": { ... } 
+}
+}
+Respostas:
+{
+  "jsonrpc": "2.0",
+  "id": "<req-id>",
+  "result": { "ok": true, "data": { ... } }
+}
+Erros (padronizados):
+{
+  "jsonrpc": "2.0",
+  "id": "<req-id>",
+  "error": {
+    "code": 40001, "message": "ValidationError",
+    "data": { "field": "cadence", "expected": "..." 
+}
+  }
+}
+5) Catálogo de Tools
+Todas as 
+tools
+ têm inputSchema/outputSchema (JSON Schema), 
+descrição
+, 
+planos elegíveis
+, 
+idempotencyKey
+ opcional e 
+SLAs
+.
+5.1 objective.create
+Plano:
+ Free/Pro/Enterprise | 
+Role:
+ MANAGER+
+Input:
+{
+  "title": "Expandir receita no canal parceiro",
+  "description": "Crescer a receita anual...",
+  "cadence": "QUARTERLY",
+  "startDate": "2026-01-01",
+  "endDate": "2026-12-31",
+  "segments": [{"axis":"Regional","values":["Sudeste","Sul"]}]
+}
+Output:
+ { "objectiveId": "uuid" }
+Notas:
+ valida janela x cadência; cria Objective em DRAFT se finalize=false.
+5.2 objective.segment
+Plano:
+ Free/Pro/Enterprise | 
+Role:
+ MANAGER+
+Input:
+ { "objectiveId":"uuid", "segments":[ {"axis":"Estado", "values":["SP","RJ"]} ] }
+Output:
+ { "updated": true }
+5.3 objective.complete
+Plano:
+ Free/Pro/Enterprise | 
+Role:
+ MANAGER+
+Input:
+ { "objectiveId":"uuid" }
+Output:
+ { "status":"ACTIVE" }
+5.4 kr.create
+Plano:
+ Free/Pro/Enterprise | 
+Role:
+ MANAGER+
+Input:
+{
+  "objectiveId": "uuid",
+  "title": "Aumentar MRR",
+  "description": "Crescer MRR mensal...",
+  "cadence": "MONTHLY",
+  "unitCode": "%",
+  "direction": "INCREASE",
+  "startDate": "2026-01-01",
+  "endDate": "2026-06-30",
+  "segments": [{"axis":"Estado","values":["SP","RJ"]}]
+}
+Output:
+ { "indicatorId": "uuid" }
+5.5 kpi.create
+Igual a kr.create porém type=KPI e objectiveId opcional.
+5.6 indicator.targets.upsert
+Plano:
+ todos | 
+Role:
+ MANAGER+
+Input:
+ { "indicatorId":"uuid", "targets":[{"period":"2026-01","targetValue":1000,"tolerance":0.05}] }
+Output:
+ { "count": 1 }
+5.7 indicator.values.list
+Plano:
+ todos | 
+Role:
+ VIEWER+
+Input:
+ { "indicatorId":"uuid", "range":"2026-01..2026-12", "segment": {"Estado":"SP"}, "latestVersion": true }
+Output:
+ { "series": [{"period":"2026-01","value":1020,"status":"ON"}, ...] 
+}
+5.8 agent.batch.ingest
+Plano:
+ Enterprise | 
+Role:
+ DATA_ADMIN/ORG_OWNER
+Input:
+ { "indicatorId":"uuid", "period":"2026-01", "value": 12345.67, "segmentKey": {"Estado":"SP"}, "checksum":"...", "batchId":"uuid" }
+Output:
+ { "accepted": true, "version": 2 }
+Notas:
+ idempotente por batchId; delega ao pipeline de ingestão.
+5.9 plan.upgrade.preview
+Plano:
+ todos | 
+Role:
+ ORG_OWNER
+Input:
+ { "to":"PRO" }
+Output:
+ { "price": {"amount": 199.0, "currency":"BRL"}, "limits": {...} 
+}
+Observação:
+ ferramentas adicionais podem ser registradas futuramente (checkin.create, alert.list, connector.test, etc.).
+6) Resources (somente leitura)
+URIs e semântica:
+objective://{id} → corpo JSON com Objective.
+kr://{id} | kpi://{id} → corpo JSON com IndicatorDefinition.
+indicator://{id}/values?range=YYYY-MM..YYYY-MM&segment=... 
+→ série JSON.
+operation://{id} → estado de execução de operações assíncronas (quando aplicável).
+Exemplo resources/read:
+{
+  "jsonrpc": "2.0",
+  "id": "2",
+  "method": "resources/read",
+  "params": { "uri": "indicator://3b2.../values?range=2026-01..2026-06&segment=Estado:SP" }
+}
+7) Prompts
+Prompts expõem 
+templates
+ que ajudam clientes de IA a iniciar fluxos assistidos.
+7.1 draft-objective-from-mission
+Input:
+ { "mission": string, "vision": string, "segment": string, "size": string }
+Output:
+ { "suggestions": ObjectiveDraft[] }
+Uso típico:
+ Cliente gera texto e chama objective.create com o rascunho aceito.
+7.2 segment-suggestions
+Input:
+ { "domain": "sales|marketing|ops", "hint": string }
+Output:
+ { "axes": [ {"label":"Estado","values":["SP","RJ",...] }, ... ] }
+Fonte:
+ combina 
+histórico da org
+ e 
+glossário
+ (Chroma) para sugerir eixos/valores comuns.
+8) Schemas (JSON Schema)
+Derivados dos 
+Zod
+ schemas do backend; exportados no registro MCP no campo inputSchema/outputSchema de cada tool.
+Exemplo — CreateIndicator (trecho):
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  
+"type": "object",
+  "properties": {
+    "objectiveId": {"type":"string","format":"uuid"},
+    "type": {"enum": ["KR","KPI"]},
+    "title": {"type":"string","minLength":4,"maxLength":120},
+    "description": {"type":"string","minLength":20,"maxLength":500},
+    "cadence": {"enum":["DAILY","WEEKLY","MONTHLY","QUARTERLY","SEMIANNUAL","ANNUAL","BIENNIAL"]},
+    "unitCode": {"type":"string"},
+    "direction": {"enum":["INCREASE","DECREASE","MAINTAIN"]},
+    "startDate": {"type":"string","format":"date-time"},
+    "endDate": {"type":"string","format":"date-time"},
+    
+"segments": {
+      "type":"array",
+      "items": {"type":"object","properties": {"axis":{"type":"string"},"values":{"type":"array","items":{"type":"string"}}}, "required":["axis","values"]}
+    }
+  },
+  "required": ["type","title","description","cadence","unitCode","direction","startDate","endDate"]
+}
+9) Versionamento
+Ferramentas versionadas
+: nome com sufixo opcional, ex.: kr.create@v2.
+Compatibilidade
+: mantemos @v1 por período de depreciação; tools/list inclui deprecated: true e sunsetAt.
+Mudanças de breaking
+ exigem versão nova.
+10) Observabilidade & Auditoria
+Métricas por tool
+: QPS, p95/p99, taxa de erro, 
+timeouts
+, 
+rate limit hits
+.
+Logs
+: cada chamada registra tool, args_redacted, actor, org_id, duration_ms, outcome em McpToolInvocationLog.
+Tracing
+: spans que encadeiam MCP → serviços → DB/HTTP.
+11) Erros & Idempotência
+Códigos base
+:
+40001 ValidationError
+40100 Unauthorized
+40300 Forbidden (role/plano/escopo)
+40400 NotFound
+40900 Conflict (idempotência/recurso existente)
+42900 RateLimited
+50000 Internal
+Idempotência
+: campos idempotencyKey aceitos em tools mutativas (ex.: kr.create). Repetição com mesma chave retorna o mesmo resultado.
+12) Segurança
+Tokens curtos
+ (15–60m) e escopos mínimos. 
+Rotação
+ por aplicativo cliente.
+Allowlist
+ de tools por 
+app/tenant
+. Recursos sensíveis ocultos por padrão.
+Payload limits
+ (ex.: 256KB por chamada); 
+streaming
+ habilitado apenas para tools que suportam chunking.
+CORS
+ apenas para origens confiáveis do próprio app; recomendado uso do servidor MCP 
+sem CORS
+ (server
+to
+server ou desktop).
+13) Exemplos ponta
+a
+ponta
+13.1 Listar ferramentas
+Request:
+{"jsonrpc":"2.0","id":"1","method":"tools/list","params":{}}
+Response:
+{"jsonrpc":"2.0","id":"1","result":{"tools":[{"name":"objective.create","desc":"Cria objetivo","inputSchema":{...},"plans":["FREE","PRO","ENTERPRISE"]}, {"name":"kr.create",...}]}}
+13.2 Criar objetivo
+Request:
+{
+  "jsonrpc":"2.0","id":"2","method":"tools/call",
+  "params":{
+    "name":"objective.create",
+    "arguments":{
+      "title":"Expandir receita no canal parceiro",
+      "description":"Crescer receita anual...",
+      "cadence":"QUARTERLY","startDate":"2026-01-01","endDate":"2026-12-31"
+    }
+  }
+}
+Response:
+ { "jsonrpc":"2.0","id":"2","result":{"ok":true,"data":{"objectiveId":"..."}} }
+13.3 Listar valores do indicador
+Request:
+{"jsonrpc":"2.0","id":"3","method":"tools/call","params":{"name":"indicator.values.list","arguments":{"indicatorId":"...","range":"2026-01..2026-06"}}}
+Response:
+{"jsonrpc":"2.0","id":"3","result":{"ok":true,"data":{"series":[{"period":"2026-01","value":1020,"status":"ON"}]}}}
+13.4 Ler um resource
+Request:
+{"jsonrpc":"2.0","id":"4","method":"resources/read","params":{"uri":"objective://..."}}
+Response:
+ { "jsonrpc":"2.0","id":"4","result":{"data":{"id":"...","title":"..."}} }
+14) Dev & Testes
+Dev (stdio):
+ iniciar yarn mcp:dev (processo stdio); usar 
+Inspector
+ para explorar catálogo.
+HTTP local:
+ POST http://localhost:8080/mcp com Bearer McpToken de teste.
+Testes
+:
+Unit
+: registradores/handlers de tools.
+Contract
+: validação de JSON Schemas exportados.
+E2E
+: cenários MCP → DB (criar objetivo/KR, listar valores, simular ingestão).
+15) Estrutura de Código (backend)
+src/modules/mcp/
+  index.ts                 # bootstrap
+  registry.ts              # registro estático/dinâmico de tools/resources/prompts
+  transports/
+    http.ts                # /mcp endpoint (JSON-RPC)
+    stdio.ts               # modo dev
+  auth/
+    scopes.ts              # verificação de escopos e planos
+    context.ts             # injeta orgId/roles/plan no contexto
+  tools/
+    objectives.ts          # objective.create/segment/complete
+    indicators.ts          # kr.create/kpi.create/targets.upsert/values.list
+    agent.ts               # agent.batch.ingest
+    
+billing.ts             # plan.upgrade.preview
+  resources/
+    objective.ts           # objective://{id}
+    indicator.ts           # indicator://{id}/values
+    operation.ts           # operation://{id}
+  prompts/
+    draftObjective.ts
+    segmentSuggestions.ts
+  schemas/                 # JSON Schemas gerados (zod-to-json-schema)
+16) Boas Práticas
+Descrever cada tool claramente
+ (efeitos colaterais, latência típica, limites, idempotência).
+Não retornar dados sensíveis
+; reduzir payloads e suportar paginação nas tools de listagem.
+Marcar "experimental"
+ quando aplicável; proteger com 
+flags
+.
+Documentar exemplos
+ em cada tool (pedido/resposta) e 
+tipos
+ no registro.
+17) Roadmap MCP
+@v2 de ferramentas com 
+filtros/ordenação
+ adicionais.
+Streaming
+ padronizado de progresso/logs para ferramentas longas.
+Prompts avançados
+ com contexto por setor (via Chroma) e 
+few
+shot
+ dinâmico.
+SDK Frontend
+ opcional para consumir recursos MCP diretamente em clients confiáveis (desktop/app interna).
+FIM — MCP Detalhado

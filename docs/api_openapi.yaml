@@ -1,0 +1,1671 @@
+openapi: 3.1.0
+info:
+  title: DataInova SaaS API
+  version: 0.1.0
+  description: |
+    Documentação dos endpoints HTTP expostos pelo backend DataInova.
+    Inclui APIs REST principais, webhooks e o endpoint MCP (JSON-RPC).
+servers:
+  - url: https://api.datainova.com
+    description: Produção
+  - url: http://localhost:3000
+    description: Desenvolvimento
+tags:
+  - name: Health
+  - name: Onboarding
+  - name: Objectives
+  - name: Indicators
+  - name: Agents
+  - name: Alerts
+  - name: Checkins
+  - name: Billing
+  - name: MCP
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          description: Código HTTP associado ao erro.
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          description: Informações adicionais quando aplicável.
+      required:
+        - statusCode
+        - error
+        - message
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        uptime:
+          type: number
+          description: Tempo de atividade, em segundos.
+      required:
+        - status
+        - uptime
+    Cadence:
+      type: string
+      enum:
+        - DAILY
+        - WEEKLY
+        - MONTHLY
+        - QUARTERLY
+        - SEMIANNUAL
+        - ANNUAL
+        - BIENNIAL
+    IndicatorDirection:
+      type: string
+      enum:
+        - INCREASE
+        - DECREASE
+        - MAINTAIN
+    IndicatorStatusCalc:
+      type: string
+      enum:
+        - ON
+        - RISK
+        - OFF
+    SegmentValue:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        value:
+          type: string
+        code:
+          type: string
+      required:
+        - id
+        - value
+        - code
+    SegmentValueInput:
+      type: object
+      properties:
+        value:
+          type: string
+        code:
+          type: string
+      required:
+        - value
+        - code
+    SegmentAxis:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        label:
+          type: string
+        code:
+          type: string
+        values:
+          type: array
+          items:
+            $ref: '#/components/schemas/SegmentValue'
+      required:
+        - id
+        - label
+        - code
+        - values
+    SegmentAxisInput:
+      type: object
+      properties:
+        label:
+          type: string
+        code:
+          type: string
+        values:
+          type: array
+          items:
+            $ref: '#/components/schemas/SegmentValueInput'
+          default: []
+      required:
+        - label
+        - code
+    Objective:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        orgId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        cadence:
+          $ref: '#/components/schemas/Cadence'
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum:
+            - DRAFT
+            - ACTIVE
+            - ARCHIVED
+        teamId:
+          type: string
+          format: uuid
+          nullable: true
+        segments:
+          type: array
+          items:
+            $ref: '#/components/schemas/SegmentAxis'
+      required:
+        - id
+        - orgId
+        - title
+        - description
+        - cadence
+        - startDate
+        - endDate
+        - status
+        - teamId
+        - segments
+    ObjectiveListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Objective'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+      required:
+        - items
+        - page
+        - pageSize
+        - total
+    CreateObjectiveRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 3
+        description:
+          type: string
+          minLength: 10
+        cadence:
+          $ref: '#/components/schemas/Cadence'
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        teamId:
+          type: string
+          format: uuid
+          nullable: true
+        segments:
+          type: array
+          items:
+            $ref: '#/components/schemas/SegmentAxisInput'
+      required:
+        - title
+        - description
+        - cadence
+        - startDate
+        - endDate
+    UpdateObjectiveRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 3
+        description:
+          type: string
+          minLength: 10
+        cadence:
+          $ref: '#/components/schemas/Cadence'
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        teamId:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+          enum:
+            - DRAFT
+            - ACTIVE
+            - ARCHIVED
+      additionalProperties: false
+    Indicator:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum:
+            - KR
+            - KPI
+        title:
+          type: string
+        description:
+          type: string
+        cadence:
+          $ref: '#/components/schemas/Cadence'
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        unitCode:
+          type: string
+        direction:
+          $ref: '#/components/schemas/IndicatorDirection'
+        status:
+          type: string
+      required:
+        - id
+        - type
+        - title
+        - description
+        - cadence
+        - startDate
+        - endDate
+        - unitCode
+        - direction
+        - status
+    CreateIndicatorRequest:
+      type: object
+      properties:
+        objectiveId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Obrigatório para indicadores do tipo KR.
+        type:
+          type: string
+          enum:
+            - KR
+            - KPI
+        title:
+          type: string
+        description:
+          type: string
+        cadence:
+          $ref: '#/components/schemas/Cadence'
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        unitCode:
+          type: string
+        unitCustom:
+          type: string
+        direction:
+          $ref: '#/components/schemas/IndicatorDirection'
+        segments:
+          type: array
+          items:
+            $ref: '#/components/schemas/SegmentAxisInput'
+      required:
+        - type
+        - title
+        - description
+        - cadence
+        - startDate
+        - endDate
+        - unitCode
+        - direction
+    IndicatorValue:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        period:
+          type: string
+        segmentKey:
+          type: string
+          nullable: true
+        value:
+          type: number
+        status:
+          $ref: '#/components/schemas/IndicatorStatusCalc'
+        version:
+          type: integer
+        collectedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - period
+        - segmentKey
+        - value
+        - status
+        - version
+        - collectedAt
+    IndicatorValueSeriesResponse:
+      type: object
+      properties:
+        indicatorId:
+          type: string
+          format: uuid
+        values:
+          type: array
+          items:
+            $ref: '#/components/schemas/IndicatorValue'
+      required:
+        - indicatorId
+        - values
+    IndicatorSegmentUpdateRequest:
+      type: object
+      properties:
+        segments:
+          type: array
+          items:
+            $ref: '#/components/schemas/SegmentAxisInput'
+      required:
+        - segments
+    IndicatorTargetsRequest:
+      type: object
+      properties:
+        targets:
+          type: array
+          items:
+            type: object
+            properties:
+              period:
+                type: string
+                nullable: true
+              targetValue:
+                type: number
+              tolerance:
+                type: number
+                nullable: true
+              baseline:
+                type: number
+                nullable: true
+            required:
+              - targetValue
+      required:
+        - targets
+    Agent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - INACTIVE
+            - REVOKED
+        version:
+          type: string
+        lastSeenAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - name
+        - status
+        - version
+        - lastSeenAt
+    AgentListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Agent'
+      required:
+        - items
+    AgentRegisterRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+          default: 1.0.0
+      required:
+        - name
+    AgentRegisterResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - INACTIVE
+            - REVOKED
+        version:
+          type: string
+      required:
+        - id
+        - name
+        - status
+        - version
+    AgentUpdateRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - INACTIVE
+            - REVOKED
+        version:
+          type: string
+      additionalProperties: false
+    AgentIngestRequest:
+      type: object
+      properties:
+        batchId:
+          type: string
+        indicatorId:
+          type: string
+          format: uuid
+        period:
+          type: string
+        value:
+          type: number
+        checksum:
+          type: string
+        segmentKey:
+          type: string
+          nullable: true
+        readRows:
+          type: integer
+          minimum: 0
+        aggregatedRows:
+          type: integer
+          minimum: 0
+      required:
+        - batchId
+        - indicatorId
+        - period
+        - value
+        - checksum
+    AgentIngestResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - accepted
+            - duplicate
+        indicatorValueId:
+          type: string
+          format: uuid
+          nullable: true
+        batchId:
+          type: string
+        version:
+          type: integer
+          nullable: true
+      required:
+        - status
+        - batchId
+    Alert:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        entity:
+          type: string
+        entityId:
+          type: string
+        type:
+          type: string
+        severity:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        resolvedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - entity
+        - entityId
+        - type
+        - severity
+        - createdAt
+        - resolvedAt
+    AlertListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Alert'
+      required:
+        - items
+    AlertAckRequest:
+      type: object
+      properties:
+        alertId:
+          type: string
+          format: uuid
+      required:
+        - alertId
+    AlertAckResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        resolvedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - resolvedAt
+    Checkin:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        objectiveId:
+          type: string
+          format: uuid
+        indicatorId:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+          enum:
+            - ON_TRACK
+            - AT_RISK
+            - OFF_TRACK
+        cadence:
+          type: string
+          enum:
+            - WEEKLY
+            - BIWEEKLY
+            - MONTHLY
+        notes:
+          type: string
+          nullable: true
+        learnings:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - objectiveId
+        - indicatorId
+        - status
+        - cadence
+        - notes
+        - learnings
+        - createdAt
+    CheckinCreateRequest:
+      type: object
+      properties:
+        objectiveId:
+          type: string
+          format: uuid
+        indicatorId:
+          type: string
+          format: uuid
+        cadence:
+          type: string
+          enum:
+            - WEEKLY
+            - BIWEEKLY
+            - MONTHLY
+        notes:
+          type: string
+        status:
+          type: string
+          enum:
+            - ON_TRACK
+            - AT_RISK
+            - OFF_TRACK
+        learnings:
+          type: string
+      required:
+        - objectiveId
+        - cadence
+        - status
+    CheckinListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Checkin'
+      required:
+        - items
+    OnboardingSessionResponse:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+      required:
+        - sessionId
+    OnboardingStepRequest:
+      type: object
+      properties:
+        step:
+          type: string
+        payload:
+          description: Objeto específico do passo; armazenado como JSON.
+      required:
+        - step
+        - payload
+    OnboardingCompleteResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - completed
+        organizationId:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+      required:
+        - status
+        - organizationId
+        - tenantId
+    StripeWebhookEvent:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+      required:
+        - id
+        - type
+    HubspotWebhookPayload:
+      oneOf:
+        - type: array
+          items:
+            type: object
+            additionalProperties: true
+        - type: object
+          additionalProperties: true
+    MCPRequest:
+      type: object
+      description: Payload JSON-RPC 2.0 encaminhado ao servidor MCP.
+      properties:
+        jsonrpc:
+          type: string
+          enum:
+            - '2.0'
+        id:
+          oneOf:
+            - type: string
+            - type: integer
+            - type: 'null'
+        method:
+          type: string
+        params:
+          description: Parâmetros específicos da chamada.
+      required:
+        - jsonrpc
+        - method
+paths:
+  /healthz:
+    get:
+      tags:
+        - Health
+      summary: Verifica o status da API.
+      responses:
+        '200':
+          description: API operacional.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+  /onboarding/sessions:
+    post:
+      tags:
+        - Onboarding
+      summary: Cria uma nova sessão de onboarding.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                orgName:
+                  type: string
+                email:
+                  type: string
+                  format: email
+              required:
+                - orgName
+      responses:
+        '201':
+          description: Sessão criada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingSessionResponse'
+        '400':
+          description: Dados inválidos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /onboarding/sessions/{id}/step:
+    patch:
+      tags:
+        - Onboarding
+      summary: Atualiza um passo da sessão de onboarding.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingStepRequest'
+      responses:
+        '204':
+          description: Passo registrado com sucesso.
+        '404':
+          description: Sessão não encontrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /onboarding/sessions/{id}/complete:
+    post:
+      tags:
+        - Onboarding
+      summary: Conclui a sessão de onboarding e provisiona tenant.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Sessão concluída.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingCompleteResponse'
+        '404':
+          description: Sessão não encontrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /objectives:
+    get:
+      tags:
+        - Objectives
+      summary: Lista objetivos da organização.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              - ACTIVE
+              - ARCHIVED
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Lista paginada de objetivos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObjectiveListResponse'
+        '401':
+          description: Não autorizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - Objectives
+      summary: Cria um novo objetivo.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateObjectiveRequest'
+      responses:
+        '201':
+          description: Objetivo criado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                required:
+                  - id
+        '400':
+          description: Período inválido ou dados incorretos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Sem permissão ou limite excedido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /objectives/{id}:
+    get:
+      tags:
+        - Objectives
+      summary: Obtém um objetivo específico.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Objetivo encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Objective'
+        '404':
+          description: Objetivo não encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags:
+        - Objectives
+      summary: Atualiza campos de um objetivo.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateObjectiveRequest'
+      responses:
+        '200':
+          description: Objetivo atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Objective'
+        '404':
+          description: Objetivo não encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Objectives
+      summary: Exclui um objetivo sem indicadores associados.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Objetivo excluído.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  deleted:
+                    type: boolean
+                    example: true
+                required:
+                  - id
+                  - deleted
+        '409':
+          description: Objetivo possui indicadores associados.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /objectives/{id}/segments:
+    post:
+      tags:
+        - Objectives
+      summary: Substitui a configuração de segmentos de um objetivo.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                segments:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/SegmentAxisInput'
+              required:
+                - segments
+      responses:
+        '200':
+          description: Segmentos atualizados.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  segments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SegmentAxisInput'
+                required:
+                  - id
+                  - segments
+        '404':
+          description: Objetivo não encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /objectives/{id}/complete:
+    post:
+      tags:
+        - Objectives
+      summary: Marca um objetivo como ativo/concluído.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Objetivo finalizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                required:
+                  - id
+                  - status
+  /objectives/{id}/archive:
+    post:
+      tags:
+        - Objectives
+      summary: Arquiva um objetivo.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Objetivo arquivado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  archivedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  status:
+                    type: string
+                required:
+                  - id
+                  - archivedAt
+                  - status
+  /objectives/{id}/restore:
+    post:
+      tags:
+        - Objectives
+      summary: Restaura um objetivo arquivado.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Objetivo restaurado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  archivedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  status:
+                    type: string
+                required:
+                  - id
+                  - archivedAt
+                  - status
+  /kresults:
+    post:
+      tags:
+        - Objectives
+      summary: Cria um Key Result associado a um objetivo.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/CreateIndicatorRequest'
+                - type: object
+                  properties:
+                    type:
+                      type: string
+                      enum:
+                        - KR
+      responses:
+        '201':
+          description: KR criado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Indicator'
+  /kpis:
+    post:
+      tags:
+        - Objectives
+      summary: Cria um KPI.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/CreateIndicatorRequest'
+                - type: object
+                  properties:
+                    type:
+                      type: string
+                      enum:
+                        - KPI
+      responses:
+        '201':
+          description: KPI criado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Indicator'
+  /indicators/{id}/values:
+    get:
+      tags:
+        - Indicators
+      summary: Lista valores de um indicador.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: range
+          in: query
+          schema:
+            type: string
+            description: Intervalo ex. 2024-01..2024-06.
+        - name: segment
+          in: query
+          schema:
+            type: string
+            description: Segmento normalizado (ex. Canal=Online;Região=Sul).
+      responses:
+        '200':
+          description: Valores do indicador.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndicatorValueSeriesResponse'
+        '404':
+          description: Indicador não encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /indicators/{id}/segments:
+    post:
+      tags:
+        - Indicators
+      summary: Substitui os segmentos configurados em um indicador.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IndicatorSegmentUpdateRequest'
+      responses:
+        '200':
+          description: Segmentos atualizados.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  segments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SegmentAxisInput'
+                required:
+                  - id
+                  - segments
+        '404':
+          description: Indicador não encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /indicators/{id}/targets:
+    post:
+      tags:
+        - Indicators
+      summary: Cria ou substitui metas de um indicador.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IndicatorTargetsRequest'
+      responses:
+        '200':
+          description: Metas atualizadas.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  indicatorId:
+                    type: string
+                    format: uuid
+                  targets:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/IndicatorTargetsRequest/properties/targets/items'
+                required:
+                  - indicatorId
+                  - targets
+  /agents:
+    get:
+      tags:
+        - Agents
+      summary: Lista agentes registrados.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Lista de agentes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentListResponse'
+        '403':
+          description: Requer permissão ORG_OWNER ou MANAGER.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /agents/register:
+    post:
+      tags:
+        - Agents
+      summary: Registra um novo agente DataInova.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentRegisterRequest'
+      responses:
+        '201':
+          description: Agente registrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentRegisterResponse'
+  /agents/{id}:
+    patch:
+      tags:
+        - Agents
+      summary: Atualiza status ou versão de um agente.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentUpdateRequest'
+      responses:
+        '200':
+          description: Agente atualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                  version:
+                    type: string
+                required:
+                  - id
+                  - status
+                  - version
+        '404':
+          description: Agente não encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /ingest/indicator-values:
+    post:
+      tags:
+        - Agents
+      summary: Endpoint ingest para o DataInova Agent.
+      description: |
+        Recebe valores de indicadores enviados pelo agente. Requer cabeçalhos `x-agent-id` (UUID) e `x-agent-signature`
+        com assinatura HMAC do corpo utilizando o segredo configurado.
+      parameters:
+        - name: x-agent-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: x-agent-signature
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentIngestRequest'
+      responses:
+        '202':
+          description: Lote aceito ou duplicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentIngestResponse'
+        '401':
+          description: Assinatura inválida.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: `batchId` repetido com checksum divergente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /alerts:
+    get:
+      tags:
+        - Alerts
+      summary: Lista alertas da organização.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              - open
+              - resolved
+      responses:
+        '200':
+          description: Lista de alertas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertListResponse'
+  /alerts/ack:
+    post:
+      tags:
+        - Alerts
+      summary: Confirma (ack) um alerta.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertAckRequest'
+      responses:
+        '200':
+          description: Alerta confirmado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertAckResponse'
+        '404':
+          description: Alerta não encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /checkins:
+    get:
+      tags:
+        - Checkins
+      summary: Lista check-ins de um objetivo.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: objectiveId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Lista de check-ins.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckinListResponse'
+        '404':
+          description: Objetivo não encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - Checkins
+      summary: Cria um novo check-in.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckinCreateRequest'
+      responses:
+        '201':
+          description: Check-in criado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Checkin'
+        '404':
+          description: Objetivo ou indicador não encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /webhooks/stripe:
+    post:
+      tags:
+        - Billing
+      summary: Recebe eventos de webhook da Stripe.
+      description: |
+        Valida a assinatura via cabeçalho `stripe-signature` quando o segredo estiver configurado
+        (`STRIPE_WEBHOOK_SECRET`). Não requer autenticação.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StripeWebhookEvent'
+      responses:
+        '202':
+          description: Evento aceito.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received:
+                    type: boolean
+                required:
+                  - received
+        '401':
+          description: Assinatura ausente ou inválida.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /webhooks/hubspot:
+    post:
+      tags:
+        - Billing
+      summary: Recebe webhooks da HubSpot.
+      description: |
+        Requer cabeçalho `x-hubspot-signature-v3` ou `x-hubspot-signature` quando o segredo estiver definido.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HubspotWebhookPayload'
+      responses:
+        '202':
+          description: Evento aceito.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received:
+                    type: boolean
+                required:
+                  - received
+        '401':
+          description: Assinatura inválida.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /mcp:
+    post:
+      tags:
+        - MCP
+      summary: Endpoint JSON-RPC do Model Context Protocol.
+      description: |
+        Encaminha chamadas JSON-RPC 2.0 para o servidor MCP. O corpo deve conter métodos como `tools/list`,
+        `tools/call`, `resources/list`, `resources/read`, `prompts/list` e `prompts/get`.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MCPRequest'
+      responses:
+        '200':
+          description: Resposta JSON-RPC (sucesso ou erro).
+          content:
+            application/json:
+              schema:
+                description: Estrutura JSON-RPC dinâmica de acordo com o método invocado.

@@ -1,0 +1,23 @@
+{
+  "color": {
+    "brand": { "value": "#2d2926" },
+    "onBrand": { "value": "#ffffff" },
+    "bg": { "value": "#ffffff" },
+    "fg": { "value": "#2d2926" },
+    "muted": { "value": "#f5f4f3" },
+    "border": { "value": "#e0dcd8" }
+  },
+  "font": {
+    "display": { "value": "Jaapokki, system-ui, sans-serif" },
+    "sans": { "value": "Exo 2, system-ui, sans-serif" }
+  },
+  "radius": {
+    "lg": { "value": "16px" },
+    "md": { "value": "12px" },
+    "sm": { "value": "8px" }
+  },
+  "shadow": {
+    "soft": { "value": "0 8px 24px rgba(0,0,0,.08)" },
+    "elevated": { "value": "0 18px 32px rgba(21,17,14,.14)" }
+  }
+}

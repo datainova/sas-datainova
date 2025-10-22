@@ -1,0 +1,516 @@
+Backend — Documentação Detalhada (DataInova SaaS)
+Especificação técnica do backend para o SaaS de Objetivos Estratégicos, KResults e KPIs, incluindo ingestão via Data Innova Agent, conectores RO (Free/Pro), MCP e integrações (Stripe/HubSpot/Slack/Teams). Linguagem: Node.js + TypeScript.
+
+0) Princípios
+	•	NãoBI: armazenamos apenas agregados por período (sem dados linhaalinha do cliente).
+	•	Multitenant por RLS: todas as leituras/escritas restritas a org_id.
+	•	Contratos primeiro: OpenAPI + Zod; ferramentas MCP espelham as operações REST.
+	•	Idempotência e versionamento: ingestão, webhooks e jobs resilientes.
+	•	Observabilidade by design: logs estruturados, métricas e traces em 100% das rotas e jobs.
+
+1) Visão de Arquitetura do Backend
+Componentes:
+	•	API (Fastify/TS): módulos por domínio (organizations, objectives, indicators, segments, values, agents, ingest, alerts, checkins, billing, leads, integrations, mcp).
+	•	Workers (pgboss): ingestão, coleta RO, webhooks (Stripe/HubSpot), alertas, backfills.
+	•	PostgreSQL: relacional, RLS por org_id, partições para séries de valores, índices dedicados.
+	•	Chroma: vetorial para busca semântica (glossário/sugestões de nomes/segmentações).
+	•	MCP Server: transporte HTTP streamable (prod) e stdio (dev) expondo Tools/Resources/Prompts.
+Padrões:
+	•	DDD leve por módulos; services puros tipados.
+	•	Plugins Fastify para auth, db, ratelimit, pino logger, otel.
+	•	Prisma como ORM; migrações versionadas.
+
+2) Estrutura de Pastas (sugerida)
+backend/
+  src/
+    app.ts                 # bootstrap Fastify
+    config/                # validação de env (Zod), feature flags
+    plugins/               # pino, auth, db(prisma), rate-limit, otel
+    shared/                # erros, middlewares, utils, schemas base
+    modules/
+      organizations/
+      teams/
+      objectives/
+      indicators/          # KR/KPI
+      segments/
+      values/
+      targets/
+      ingest/
+      agents/
+      alerts/
+      checkins/
+      billing/             # Stripe
+      leads/               # HubSpot
+      integrations/        # Slack/Teams, DWs
+      mcp/                 # MCP server adapter
+    workers/
+      ingest-batch-processor.ts
+      staleness-checker.ts
+      alert-dispatcher.ts
+      connector-pull.ts
+      webhook-dispatcher.ts
+    db/
+      prisma.schema        # Prisma models
+      migrations/
+  test/
+    unit/
+    integration/
+    e2e/
+
+3) Configuração & Variáveis de Ambiente
+3.1 Validação (Zod)
+// src/config/env.ts
+import { z } from 'zod'
+
+export const Env = z.object({
+  NODE_ENV: z.enum(['development','test','staging','production']),
+  PORT: z.string().default('8080'),
+  DATABASE_URL: z.string().url(),
+  CHROMA_URL: z.string().url(),
+  JWT_PUBLIC_KEY: z.string(),
+  JWT_ISSUER: z.string(),
+  RATE_LIMIT_PER_MIN: z.coerce.number().default(120),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  STRIPE_SECRET_KEY: z.string().optional(),
+  HUBSPOT_WEBHOOK_SECRET: z.string().optional(),
+  HUBSPOT_ACCESS_TOKEN: z.string().optional(),
+  AGENT_SIGNING_SECRET: z.string().min(32),
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().optional(),
+}).readonly()
+3.2 Convenções
+	•	Segredos em cofre (KMS/SM) + env injection no runtime.
+	•	Feature flags por features.json (Leitura em cache, override por tenant).
+
+4) Autenticação, Autorização e Multitenancy
+4.1 Auth
+	•	JWT assinado pelo backend (ou provedor SSO no Enterprise) contendo sub, org_id, roles[], plan.
+	•	Refresh tokens curtos; rotação a cada login.
+4.2 RBAC
+	•	Perfis: ORG_OWNER, MANAGER, CONTRIBUTOR, VIEWER.
+	•	Escopos adicionais para MCP (tool:*, resource:*).
+4.3 Multitenant com RLS
+Abordagem: 1 banco, 1 esquema, todas as tabelas com coluna org_id + RLS.
+Sessão: em cada request, após validar o token, o backend executa:
+-- por transação
+SELECT set_config('app.current_org_id', $orgId, true);
+SELECT set_config('app.current_roles', $rolesCsv, true);
+Política (exemplo):
+-- Habilitar RLS
+ALTER TABLE objective ENABLE ROW LEVEL SECURITY;
+
+-- Política padrão
+CREATE POLICY objective_isolate_org ON objective
+USING (org_id = current_setting('app.current_org_id')::uuid)
+WITH CHECK (org_id = current_setting('app.current_org_id')::uuid);
+Nota: As queries do Prisma devem rodar dentro de uma transação que inicia com o SET LOCAL acima; um helper withOrgContext(orgId, fn) encapsula a execução.
+
+5) Modelagem de Dados (Prisma)
+// db/prisma.schema (trechos principais)
+model Organization {
+  id           String   @id @default(uuid())
+  name         String
+  countryIso   String
+  segmentCode  String
+  sizeBucket   String
+  mission      String?
+  vision       String?
+  tenants      Tenant[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Tenant {
+  id        String   @id @default(uuid())
+  orgId     String
+  planId    String
+  timezone  String
+  currency  String
+  locale    String
+  status    String
+  org       Organization @relation(fields: [orgId], references: [id])
+}
+
+model Objective {
+  id          String   @id @default(uuid())
+  orgId       String
+  teamId      String?
+  title       String
+  description String
+  cadence     Cadence
+  startDate   DateTime
+  endDate     DateTime
+  status      ObjectiveStatus
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([orgId])
+}
+
+enum Cadence { DAILY WEEKLY MONTHLY QUARTERLY SEMIANNUAL ANNUAL BIENNIAL }
+
+enum ObjectiveStatus { DRAFT ACTIVE ARCHIVED }
+
+enum IndicatorType { KR KPI }
+
+enum Direction { INCREASE DECREASE MAINTAIN }
+
+enum IndicatorStatus { DRAFT ACTIVE ARCHIVED }
+
+model IndicatorDefinition {
+  id          String   @id @default(uuid())
+  orgId       String
+  objectiveId String?
+  type        IndicatorType
+  title       String
+  description String
+  cadence     Cadence
+  unitCode    String
+  unitCustom  String?
+  direction   Direction
+  startDate   DateTime
+  endDate     DateTime
+  status      IndicatorStatus
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([orgId])
+  @@index([objectiveId])
+}
+
+model IndicatorTarget {
+  id           String   @id @default(uuid())
+  indicatorId  String
+  periodStart  DateTime? // opcional para metas por período
+  targetValue  Float
+  tolerance    Float?    // 0..1
+  baseline     Float?
+  indicator    IndicatorDefinition @relation(fields: [indicatorId], references: [id])
+  @@unique([indicatorId, periodStart])
+}
+
+model IndicatorSegmentAxis {
+  id          String   @id @default(uuid())
+  indicatorId String
+  label       String
+  code        String
+  indicator   IndicatorDefinition @relation(fields: [indicatorId], references: [id])
+  @@unique([indicatorId, code])
+}
+
+model IndicatorSegmentValue {
+  id      String   @id @default(uuid())
+  axisId  String
+  value   String
+  code    String
+  axis    IndicatorSegmentAxis @relation(fields: [axisId], references: [id])
+  @@unique([axisId, code])
+}
+
+model IndicatorValue {
+  id            String   @id @default(uuid())
+  orgId         String
+  indicatorId   String
+  periodStart   DateTime
+  granularity   Cadence
+  segmentKey    Json?    // JSON normalizado {"Estado":"SP","Canal":"Direto"}
+  value         Float
+  statusCalc    String   // ON|RISK|OFF
+  collectedAt   DateTime @default(now())
+  origin        String   // AGENT|CONNECTOR
+  version       Int      @default(1)
+  batchId       String
+  checksum      String
+  @@unique([indicatorId, periodStart, segmentKey, version])
+  @@index([orgId, indicatorId, periodStart])
+}
+
+model Agent {
+  id         String   @id @default(uuid())
+  orgId      String
+  name       String
+  version    String
+  status     String
+  lastSeenAt DateTime?
+}
+
+model DataTransferBatch {
+  id          String   @id // batchId
+  agentId     String
+  indicatorId String
+  periodStart DateTime
+  checksum    String
+  readRows    Int
+  aggRows     Int
+  receivedAt  DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  orgId     String
+  entity    String
+  entityId  String
+  action    String
+  before    Json?
+  after     Json?
+  actorId   String?
+  createdAt DateTime @default(now())
+  @@index([orgId, entity, entityId])
+}
+Particionamento: IndicatorValue pode ser particionada por intervalo de periodStart (mensal) via migrações SQL nativas (fora do Prisma) para alto volume.
+
+6) Políticas de RLS (SQL)
+-- Exemplo genérico para tabelas com org_id
+CREATE POLICY org_select ON indicatorvalue
+  FOR SELECT USING (org_id = current_setting('app.current_org_id')::uuid);
+CREATE POLICY org_insert ON indicatorvalue
+  FOR INSERT WITH CHECK (org_id = current_setting('app.current_org_id')::uuid);
+CREATE POLICY org_update ON indicatorvalue
+  FOR UPDATE USING (org_id = current_setting('app.current_org_id')::uuid)
+              WITH CHECK (org_id = current_setting('app.current_org_id')::uuid);
+Boas práticas:
+	•	ALTER TABLE ... ENABLE ROW LEVEL SECURITY;
+	•	ALTER TABLE ... FORCE ROW LEVEL SECURITY; (impede bypass por superuser não esperado).
+	•	Toda INSERT deve preencher org_id pela camada de serviço (derivado do token do usuário/agent).
+
+7) API Design
+7.1 Convenções
+	•	REST com snake_case nos caminhos e camelCase no JSON.
+	•	Pagination: limit, cursor (opaque), hasMore.
+	•	Problem+JSON para erros (type, title, detail, instance, code).
+	•	ETag/IfNoneMatch em GETs idempotentes de alto tráfego.
+7.2 Padronização de Erros
+{
+  "type": "https://errors.datainova.com/validation",
+  "title": "ValidationError",
+  "detail": "cadence must be one of ...",
+  "code": "VAL-001",
+  "instance": "/kresults"
+}
+7.3 Exemplos de Endpoints (OpenAPI — trechos)
+paths:
+  /objectives:
+    post:
+      summary: Create Objective
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateObjective' }
+      responses:
+        '201':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Objective' }
+  /kresults:
+    post:
+      summary: Create K-Result
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateIndicator' }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+7.4 Schemas (Zod – trechos)
+export const Cadence = z.enum(['DAILY','WEEKLY','MONTHLY','QUARTERLY','SEMIANNUAL','ANNUAL','BIENNIAL'])
+export const Direction = z.enum(['INCREASE','DECREASE','MAINTAIN'])
+
+export const CreateIndicator = z.object({
+  objectiveId: z.string().uuid().optional(),
+  type: z.enum(['KR','KPI']),
+  title: z.string().min(4).max(120),
+  description: z.string().min(20).max(500),
+  cadence: Cadence,
+  unitCode: z.string(),
+  unitCustom: z.string().optional(),
+  direction: Direction,
+  startDate: z.string().datetime(),
+  endDate: z.string().datetime(),
+  segments: z.array(z.object({ axis: z.string(), values: z.array(z.string())})).optional()
+})
+
+8) Ingestão — Data Innova Agent (Enterprise)
+8.1 Handshake e Registro
+	•	Registro: POST /agents/register (OrgOwner/DataAdmin) emite agentId + apiKey (curta duração para primeiro boot).
+	•	O Agent troca por chave de assinatura de longa duração (AGENT_SIGNING_SECRET escopo org/agent) e armazena no seu cofre local.
+8.2 Assinatura de Payload (HMACSHA256)
+X-Agent-Id: <agentId>
+X-Signature: sha256=<hex(hmac(body, agent_secret))>
+X-Batch-Id: <uuid>
+8.3 Contrato de Ingestão
+POST /ingest/indicator-values
+{
+  "indicatorId": "uuid",
+  "periodStart": "2025-09-01",
+  "granularity": "MONTHLY",
+  "segmentKey": {"Estado":"SP","Canal":"Direto"},
+  "value": 123456.78,
+  "checksum": "abc123",
+  "sourceMeta": {"job":"receita_liquida_mensal","rowsRead": 53211}
+}
+Respostas: 202 Accepted (processamento assíncrono) ou 409 Conflict (batch duplicado), 401 (assinatura inválida).
+8.4 Idempotência & Processamento
+	•	Dedupe por X-Batch-Id no DataTransferBatch. Se já processado, retornamos 409.
+	•	Worker ingest-batch-processor valida schema, HMAC, checksum, aplica RLS por org_id do agente e upserta IndicatorValue com version apropriada.
+8.5 Reprocessamento / Versões
+	•	Reenvio do mesmo periodStart e segmentKey com version = last+1 (histórico preservado). A visualização padrão usa a maior versão.
+
+9) Conectores RO (Free/Pro)
+	•	Conectores para BigQuery, Snowflake, Redshift, Databricks, Postgres/SQL Server.
+	•	Execução serverside de queries apenas agregadas; validações antiexpansão (LIMIT, HAVING/ROLLUP verificadas por linter simples, allowlist de funções).
+	•	Credenciais guardadas em cofre e referenciadas por Connector (somente metadados ficam no Postgres).
+	•	Jobs connector-pull executam de acordo com a cadência do indicador; staleness gera alerta.
+
+10) Cálculo de Status
+export function statusFrom(target: number, tol: number, dir: Direction, val: number){
+  if(dir==='INCREASE') return val >= target ? 'ON' : (val >= target*(1 - (tol||0)) ? 'RISK' : 'OFF')
+  if(dir==='DECREASE') return val <= target ? 'ON' : (val <= target*(1 + (tol||0)) ? 'RISK' : 'OFF')
+  return Math.abs(val - target) <= (tol||0) ? 'ON' : 'OFF'
+}
+	•	Aplicase por período (na ingestão) e reprocessamentos atualizam statusCalc.
+
+11) Alertas & Checkins
+	•	Alertas: staleness (sem valor novo após cadence SLA), desvio (OFF/RISK), falhas de ingestão. Destinos: Slack/Teams/email.
+	•	Checkins: POST /checkins com objectiveId|indicatorId, período, status e notas.
+	•	Jobs staleness-checker e alert-dispatcher rodam em pgboss.
+
+12) Billing (Stripe) & Planos
+	•	Free: limites rígidos (nº objetivos, KRs/KPIs) e/ou cadência mínima.
+	•	Pro: ilimitado no SaaS; sem Agent.
+	•	Enterprise: habilita Agent.
+Webhooks Stripe (/webhooks/stripe): checkout.session.completed, customer.subscription.updated|deleted, invoice.payment_succeeded|failed.
+	•	Idempotência por event.id (tabela WebhookEvent opcional) e aplicação de Entitlements.
+
+13) Leads (HubSpot)
+	•	Upsert de Company após finalização do onboarding (nome, país, segmento, porte, missão, visão).
+	•	Associação ao lead/contact quando existir; erros vão para DLQ (webhook-dispatcher).
+
+14) Observabilidade
+14.1 Logging (Pino)
+	•	JSON estruturado com ts, requestId, orgId, actor, route, status.
+	•	Redação de campos sensíveis; limites de tamanho.
+14.2 Métricas
+	•	Otel Metrics: latência por rota, taxa de erro, throughput de ingestão, jobs em andamento, staleness média, utilização de quotas.
+14.3 Tracing
+	•	Otel Traces com traceId propagado entre API ↔ Workers; spans para DB/HTTP (Stripe/HubSpot/Slack).
+
+15) Rate Limiting & Quotas
+	•	Rate limit por usuário e tenant (token bucket em plugin; armazenamento em memória por nó + leaky bucket por IP; em HA, considerar store Postgres simples para endpoints críticos).
+	•	Quotas (por plano): nº de objetivos, KRs/KPIs, frequência mínima de sync, nº de alertas/dia.
+
+16) Segurança
+	•	TLS 1.2+, headers de segurança (CORS, HSTS, CSP mínima para API).
+	•	RLS forçada; privilégios mínimos para usuários DB; migrações feitas por role separada.
+	•	Assinaturas de webhooks (Stripe/HubSpot) e Agent verificadas e auditadas.
+	•	PII não persistida nos valores; logs sem payloads sensíveis.
+	•	Secrets rotacionados; chave do Agent por tenant/agent.
+
+17) Testes
+	•	Unit: serviços puros (status calc, normalização de segmentação).
+	•	Integration: módulos Fastify com Postgres de teste (containers) e prisma migrate.
+	•	Contract: validação OpenAPI/Zod (schemathesis/prism opcional).
+	•	E2E: rotas chave (onboarding, objetivo, KR, ingestão, webhook Stripe) com dados sintéticos.
+
+18) CI/CD
+	•	CI: lint (ESLint), typecheck (tsc), testes unit+integration, cobertura.
+	•	Build: docker multistage; varredura de vulnerabilidades.
+	•	CD: prisma migrate deploy → deploy app → smoke tests; feature flags para toggles.
+	•	Rollback: imagens versionadas e migrações backwardcompat quando possível.
+
+19) Runbooks SRE
+	•	Ingestão parada: checar fila pgboss, DLQ e conectividade; reprocessar lotes.
+	•	RLS bloqueando: verificar app.current_org_id setado na transação; logs de auth.
+	•	Staleness alto: revisar cadências/config de conectores; health do Agent.
+	•	Stripe falhando: fila de eventos pendentes; reentrega com backoff.
+
+20) Padrões de Código (Node/TS)
+	•	strict: true, noImplicitAny, esModuleInterop: false.
+	•	Fastify + @fastify/ajv-compiler para validação de payloads (ou Zod adapter).
+	•	Pino para logs; fp-ts opcional para flows funcionais simples.
+20.1 Bootstrap (exemplo)
+// src/app.ts
+const app = fastify({ logger: true })
+app.register(authPlugin)
+app.register(dbPlugin)       // injeta prisma e helper withOrgContext
+app.register(rateLimitPlugin)
+app.register(otelPlugin)
+app.register(objectivesRoutes, { prefix: '/objectives' })
+app.register(indicatorsRoutes, { prefix: '/indicators' })
+app.register(ingestRoutes, { prefix: '/ingest' })
+app.register(webhooksRoutes, { prefix: '/webhooks' })
+app.register(mcpHttpTransport, { prefix: '/mcp' })
+
+21) MCP — Backend
+	•	Tools mapeiam serviços REST (ex.: objective.create, kr.create, indicator.values.list, agent.batch.ingest).
+	•	Resources somenteleitura (URIs lógicas: objective://{id} etc.).
+	•	Prompts (ex.: draft-objective-from-mission).
+	•	Segurança: mesmo RBAC/entitlements do REST; ratelimit por tool; logs McpToolInvocationLog.
+21.1 Exemplo de Tool
+registerTool({
+  name: 'kr.create',
+  inputSchema: zodToJsonSchema(CreateIndicator),
+  handler: async (input, ctx) => {
+    const orgId = ctx.auth.orgId
+    return withOrgContext(orgId, () => indicatorsService.createKR(input))
+  }
+})
+
+22) Normalização de Segmentação
+	•	Entrada livre no wizard → Axis/Value persistidos com code (slug) calculado.
+	•	segmentKey no valor é JSON ordenado com chaves alfabetizadas; índice GIN para consultas por filtro.
+
+23) Desempenho & Escala
+	•	Particionamento de IndicatorValue por mês.
+	•	Índices: (org_id, indicator_id, period_start); GIN para segment_key.
+	•	Batching na ingestão (lotes até 1–5k linhas); compressão gzip.
+	•	Backpressure: fila pgboss por org_id.
+
+24) Retenção & Compliance
+	•	IndicatorValue: retenção indefinida (agregados), configurável por tenant.
+	•	AuditLog: 24 meses (padrão) — exportável antes da expiração.
+	•	Webhooks/raw: 30 dias em DLQ.
+
+25) Matriz de Permissões (resumo)
+	•	ORG_OWNER: tudo na org.
+	•	MANAGER: CRUD objetivos/indicadores; ver valores e alertas.
+	•	CONTRIBUTOR: atualizar checkins; ver indicadores.
+	•	VIEWER: leitura.
+	•	DATA_ADMIN (Enterprise): gerenciar Agent e conectores.
+
+26) Tabelas Complementares (DDL sugestivo — SQL)
+CREATE TABLE webhook_event (
+  id text primary key,
+  provider text not null,
+  payload jsonb not null,
+  received_at timestamptz default now(),
+  processed_at timestamptz
+);
+
+CREATE UNIQUE INDEX ux_webhook_event_provider_id ON webhook_event(provider, id);
+
+-- Particionamento mensal (exemplo)
+CREATE TABLE indicator_value (
+  id uuid primary key default gen_random_uuid(),
+  org_id uuid not null,
+  indicator_id uuid not null,
+  period_start date not null,
+  granularity text not null,
+  segment_key jsonb,
+  value double precision not null,
+  status_calc text not null,
+  collected_at timestamptz default now(),
+  origin text not null,
+  version int not null default 1,
+  batch_id uuid not null,
+  checksum text not null
+) PARTITION BY RANGE (period_start);
+
+27) Qualidade & Gate de Liberação
+	•	Cobertura mínima 80% em domínios críticos (ingestão, cálculo de status, auth/RLS).
+	•	Teste de carga básico (p95 < 150ms nos endpoints CRUD; ingestão 1k rps agregada por fila).
+	•	Verificação de migrações em staging antes de produção.
+
+28) Futuro (roadmap backend)
+	•	SSO (OIDC/SAML), chaves mTLS por agente, canary jobs por org.
+	•	Conectores adicionais (Synapse; Salesforce Analytics, etc.).
+	•	Cache distribuído opcional (Redis) para catálogos.
+	•	Reprocessamento em massa com snapshots etiquetados.
+
+**FIM — B
+

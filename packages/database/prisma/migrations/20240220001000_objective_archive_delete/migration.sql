@@ -1,0 +1,2 @@
+ALTER TABLE "Objective"
+  ADD COLUMN "archivedAt" TIMESTAMPTZ;
