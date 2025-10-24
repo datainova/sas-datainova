@@ -20,10 +20,8 @@ import {
   Flag,
   Globe2,
   Loader2,
-  Medal,
   MessageSquare,
   PenSquare,
-  Sparkles,
   Target,
   Trophy,
   Users
@@ -106,57 +104,57 @@ const stepsMeta: StepMeta[] = [
   {
     key: "welcome",
     label: "Início",
-    title: "Configuração inicial da sua empresa",
-    description: "Leva menos de 2 minutos — vamos personalizar sua experiência.",
-    icon: <Sparkles className="h-4 w-4" />
+    title: "Configuração inicial",
+    description: "Vamos configurar os dados essenciais da sua empresa.",
+    icon: <Flag className="h-4 w-4" />
   },
   {
     key: "company",
     label: "Nome",
-    title: "Como sua empresa se apresenta oficialmente?",
-    description: "Defina o nome que usaremos em dashboards, convites e relatórios executivos.",
+    title: "Nome da empresa",
+    description: "Esse nome será usado em dashboards, convites e relatórios.",
     icon: <Building2 className="h-4 w-4" />
   },
   {
     key: "country",
     label: "País",
-    title: "Onde sua empresa opera majoritariamente?",
-    description: "Carregamos fuso horário, moeda e formatações automaticamente.",
+    title: "País de operação",
+    description: "Carregaremos fuso horário, moeda e formatações automaticamente.",
     icon: <Globe2 className="h-4 w-4" />
   },
   {
     key: "segment",
     label: "Segmento",
-    title: "Em qual segmento sua empresa atua?",
-    description: "Escolha na lista ou crie um rótulo que represente melhor seu mercado.",
+    title: "Segmento de atuação",
+    description: "Selecione na lista ou informe um rótulo representativo.",
     icon: <Target className="h-4 w-4" />
   },
   {
     key: "size",
     label: "Porte",
-    title: "Qual é o porte atual da sua empresa?",
-    description: "Usamos isso para sugerir metas, comparativos e benchmarks relevantes.",
+    title: "Porte da empresa",
+    description: "Usado para sugestões de metas e benchmarks.",
     icon: <Users className="h-4 w-4" />
   },
   {
     key: "mission",
     label: "Missão",
-    title: "Por que existimos?",
-    description: "Resuma a razão de existir da organização em tom executivo.",
+    title: "Missão da empresa",
+    description: "Descreva a razão de existir em tom executivo.",
     icon: <MessageSquare className="h-4 w-4" />
   },
   {
     key: "vision",
     label: "Visão",
-    title: "Onde queremos chegar em 3–5 anos?",
-    description: "Projete o futuro desejado da empresa com clareza inspiradora.",
+    title: "Visão (3–5 anos)",
+    description: "Projete o futuro desejado com objetividade.",
     icon: <Trophy className="h-4 w-4" />
   },
   {
     key: "review",
     label: "Resumo",
-    title: "Revise e conclua",
-    description: "Confirme os dados antes de avançar para o DataInova Connect.",
+    title: "Revisão",
+    description: "Confirme os dados para concluir o onboarding.",
     icon: <CheckCircle2 className="h-4 w-4" />,
     optional: true
   }
@@ -518,17 +516,12 @@ export function OnboardingPage() {
       <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 pb-12 pt-8 sm:px-8">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="flex items-center gap-2 text-sm uppercase tracking-[0.4em] text-white/70">
-              <Sparkles className="h-4 w-4 text-brand-foreground" />
-              DataInova Connect
-            </p>
-            <h1 className="mt-2 font-display text-3xl sm:text-4xl">
-              Onboarding com experiência WOW
-            </h1>
+            <p className="text-sm text-white/70">DataInova Connect</p>
+            <h1 className="mt-2 font-display text-3xl sm:text-4xl">Onboarding</h1>
             <p className="mt-2 max-w-2xl text-sm text-white/70 sm:text-base">
-              Configure a essência da sua organização para liberar painéis,
-              alertas e experiências personalizadas. Tudo será salvo
-              automaticamente a cada interação.
+              Configure os dados essenciais da sua organização para liberar
+              painéis, alertas e recursos personalizados. As alterações são
+              salvas automaticamente.
             </p>
           </div>
           <div className="flex items-center gap-3 text-xs text-white/60">
@@ -546,7 +539,7 @@ export function OnboardingPage() {
         </header>
 
         <div className="mt-10 flex flex-1 flex-col gap-6 lg:flex-row">
-          <aside className="w-full rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl lg:w-72">
+          <aside className="w-full rounded-xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl lg:w-72">
             <Stepper
               steps={stepsMeta}
               currentStep={currentStep}
@@ -557,13 +550,13 @@ export function OnboardingPage() {
           </aside>
 
           <main className="flex-1">
-            <div className="relative overflow-hidden rounded-[32px] border border-white/10 bg-white/10 shadow-[0_40px_120px_rgba(0,0,0,0.45)] backdrop-blur-2xl">
+            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/10 shadow-lg backdrop-blur-2xl">
               <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.16),_transparent_55%)]" />
               <div className="relative px-6 py-8 sm:px-10 sm:py-12">
                 {notification ? (
                   <div
                     className={clsx(
-                      "mb-6 rounded-2xl border px-4 py-3 text-sm shadow-lg",
+                      "mb-6 rounded-lg border px-4 py-3 text-sm shadow-sm",
                       notification.type === "error" && "border-red-400/60 bg-red-500/10 text-red-100",
                       notification.type === "success" && "border-emerald-400/60 bg-emerald-500/10 text-emerald-100",
                       notification.type === "info" && "border-blue-400/60 bg-blue-500/10 text-blue-100"
@@ -612,8 +605,8 @@ export function OnboardingPage() {
                       isSaving={autosaveMutation.isPending}
                       justSaved={justSaved}
                     />
-                    <span className="hidden text-xs uppercase tracking-[0.3em] text-white/40 sm:inline">
-                      passo {currentIndex + 1} de {stepOrder.length}
+                    <span className="hidden text-xs text-white/50 sm:inline">
+                      Passo {currentIndex + 1} de {stepOrder.length}
                     </span>
                   </div>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -621,7 +614,7 @@ export function OnboardingPage() {
                       type="button"
                       onClick={goToPrevious}
                       disabled={isFirstStep || autosaveMutation.isPending || completeMutation.isPending}
-                      className="flex items-center justify-center gap-2 rounded-2xl border border-white/20 px-4 py-2 text-sm font-semibold text-white/80 transition hover:border-white/40 disabled:cursor-not-allowed disabled:border-white/10 disabled:text-white/40"
+                      className="flex items-center justify-center gap-2 rounded-lg border border-white/20 px-4 py-2 text-sm font-medium text-white/80 transition hover:border-white/40 disabled:cursor-not-allowed disabled:border-white/10 disabled:text-white/40"
                     >
                       <ArrowLeft className="h-4 w-4" />
                       Voltar
@@ -630,16 +623,16 @@ export function OnboardingPage() {
                       type="button"
                       onClick={goToNext}
                       disabled={autosaveMutation.isPending || completeMutation.isPending}
-                      className="flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-2 text-sm font-semibold text-[#2d2926] shadow-[0_20px_60px_rgba(0,0,0,0.35)] transition hover:-translate-y-0.5 hover:shadow-[0_28px_80px_rgba(0,0,0,0.45)] focus:outline-none focus:ring-2 focus:ring-white/60 disabled:cursor-not-allowed disabled:bg-white/60"
+                      className="flex items-center justify-center gap-2 rounded-lg bg-white px-5 py-2 text-sm font-semibold text-[#1f1d1b] shadow-sm transition hover:bg-white/90 focus:outline-none focus:ring-2 focus:ring-white/60 disabled:cursor-not-allowed disabled:bg-white/60"
                     >
                       {completeMutation.isPending ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : isLastStep ? (
-                        <Medal className="h-4 w-4" />
+                        <Check className="h-4 w-4" />
                       ) : (
                         <ArrowRight className="h-4 w-4" />
                       )}
-                      {isLastStep ? "Concluir onboarding" : "Avançar"}
+                      {isLastStep ? "Concluir" : "Avançar"}
                     </button>
                   </div>
                 </footer>
@@ -911,24 +904,24 @@ function WelcomeStep({ onStart }: { onStart: () => void }) {
       <ul className="grid gap-4 md:grid-cols-2">
         {[
           {
-            title: "Experiência imersiva",
-            description: "Microinterações e motion pensados para encantar, sem perder a clareza executiva.",
-            icon: <Sparkles className="h-5 w-5 text-[#fcd34d]" />
+            title: "Experiência consistente",
+            description: "Microinterações sutis para uma experiência fluida e objetiva.",
+            icon: <Check className="h-5 w-5 text-white/80" />
           },
           {
             title: "Autosave inteligente",
             description: "Cada alteração fica registrada instantaneamente com rastreabilidade completa.",
-            icon: <PenSquare className="h-5 w-5 text-[#fbbf24]" />
+            icon: <PenSquare className="h-5 w-5 text-white/80" />
           },
           {
             title: "Governança garantida",
             description: "Org, timezone, moeda e segmentação alinhados à governança multi-tenant.",
-            icon: <Flag className="h-5 w-5 text-[#fde68a]" />
+            icon: <Flag className="h-5 w-5 text-white/80" />
           },
           {
             title: "Acessibilidade AA",
             description: "Teclado, contraste e prefers-reduced-motion respeitados por padrão.",
-            icon: <Check className="h-5 w-5 text-[#bef264]" />
+            icon: <Check className="h-5 w-5 text-white/80" />
           }
         ].map((item) => (
           <motion.li
@@ -936,7 +929,7 @@ function WelcomeStep({ onStart }: { onStart: () => void }) {
             initial={{ opacity: 0, y: prefersReducedMotion ? 0 : 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: prefersReducedMotion ? 0.18 : 0.32 }}
-            className="rounded-2xl border border-white/10 bg-black/30 p-5 shadow-lg backdrop-blur"
+            className="rounded-lg border border-white/10 bg-black/30 p-5 shadow-sm backdrop-blur"
           >
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10">
@@ -952,7 +945,7 @@ function WelcomeStep({ onStart }: { onStart: () => void }) {
         <button
           type="button"
           onClick={onStart}
-          className="inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3 text-sm font-semibold text-[#2d2926] shadow-[0_20px_60px_rgba(0,0,0,0.45)] transition hover:-translate-y-0.5 hover:shadow-[0_28px_80px_rgba(0,0,0,0.55)] focus:outline-none focus:ring-2 focus:ring-white/60"
+          className="inline-flex items-center gap-2 rounded-lg bg-white px-6 py-3 text-sm font-semibold text-[#1f1d1b] shadow-sm transition hover:bg-white/90 focus:outline-none focus:ring-2 focus:ring-white/60"
         >
           Começar agora
           <ArrowRight className="h-4 w-4" />
@@ -977,20 +970,20 @@ function CompanyStep({
     <div className="flex flex-col gap-6">
       <StepHeader meta={meta} />
       <div className="space-y-2">
-        <label className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
+        <label className="text-xs font-medium text-white/70">
           Nome da empresa
         </label>
         <input
           type="text"
           placeholder="Ex.: DataInova Connect"
           autoComplete="organization"
-          className="w-full rounded-2xl border border-white/15 bg-black/30 px-4 py-3 text-sm text-white shadow-inner focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/50"
+          className="w-full rounded-lg border border-white/15 bg-black/30 px-4 py-3 text-sm text-white shadow-inner focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/50"
           {...register("companyName")}
         />
         {errors.companyName?.message ? (
           <p className="text-xs text-red-300">{errors.companyName.message}</p>
         ) : (
-          <p className="text-xs text-white/50">
+          <p className="text-xs text-white/60">
             Dica: evite sufixos como LTDA ou S/A se não forem essenciais.
           </p>
         )}
@@ -1034,7 +1027,7 @@ function CountryStep({
     <div className="flex flex-col gap-6">
       <StepHeader meta={meta} />
       <div className="space-y-2">
-        <label className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
+        <label className="text-xs font-medium text-white/70">
           País
         </label>
         <div className="relative">
@@ -1043,14 +1036,14 @@ function CountryStep({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Busque por país (ex.: Brasil)"
-            className="w-full rounded-2xl border border-white/15 bg-black/30 px-4 py-3 text-sm text-white shadow-inner focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/50"
+            className="w-full rounded-lg border border-white/15 bg-black/30 px-4 py-3 text-sm text-white shadow-inner focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/50"
           />
           <Globe2 className="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
         </div>
         {selected ? (
-          <div className="rounded-2xl border border-white/10 bg-black/30 p-4 text-sm text-white/80">
+          <div className="rounded-lg border border-white/10 bg-black/30 p-4 text-sm text-white/80">
             <div className="flex items-center gap-3">
-              <span className="rounded-lg bg-white/10 px-2 py-1 text-xs font-semibold tracking-widest text-white/70">
+              <span className="rounded-lg bg-white/10 px-2 py-1 text-xs font-medium text-white/70">
                 {selected.code}
               </span>
               <p className="font-semibold text-white">{selected.name}</p>
@@ -1079,7 +1072,7 @@ function CountryStep({
         {error ? <p className="text-xs text-red-300">{error}</p> : null}
       </div>
       {query ? (
-        <div className="max-h-48 overflow-y-auto rounded-2xl border border-white/10 bg-black/40">
+        <div className="max-h-48 overflow-y-auto rounded-lg border border-white/10 bg-black/40">
           <ul className="divide-y divide-white/5">
             {matches.map((option) => (
               <li key={option.code}>
@@ -1155,7 +1148,7 @@ function SegmentStep({
     <div className="flex flex-col gap-6">
       <StepHeader meta={meta} />
       <div className="space-y-2">
-        <label className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
+        <label className="text-xs font-medium text-white/70">
           Segmento
         </label>
         <div className="relative">
@@ -1164,7 +1157,7 @@ function SegmentStep({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Busque ou crie um segmento (ex.: Tecnologia)"
-            className="w-full rounded-2xl border border-white/15 bg-black/30 px-4 py-3 text-sm text-white shadow-inner focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/50"
+            className="w-full rounded-lg border border-white/15 bg-black/30 px-4 py-3 text-sm text-white shadow-inner focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/50"
           />
           <Target className="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
         </div>
@@ -1204,7 +1197,7 @@ function SegmentStep({
         ) : null}
       </div>
       {selected ? (
-        <div className="rounded-2xl border border-white/10 bg-black/30 p-4 text-sm text-white/70">
+      <div className="rounded-lg border border-white/10 bg-black/30 p-4 text-sm text-white/70">
           Segmento selecionado:{" "}
           <span className="font-semibold text-white">{selected.label}</span>
         </div>
@@ -1234,16 +1227,16 @@ function SizeStep({
               type="button"
               onClick={() => form.setValue("size", option, { shouldDirty: true })}
               className={clsx(
-                "rounded-2xl border px-4 py-4 text-left text-sm transition focus:outline-none focus:ring-2 focus:ring-white/60",
+                "rounded-lg border px-4 py-4 text-left text-sm transition focus:outline-none focus:ring-2 focus:ring-white/40",
                 active
-                  ? "border-white bg-white text-[#2d2926] shadow-[0_24px_80px_rgba(255,255,255,0.25)]"
+                  ? "border-white bg-white text-[#1f1d1b] shadow-sm"
                   : "border-white/10 bg-black/30 text-white/70 hover:border-white/20"
               )}
             >
-              <p className={clsx("text-sm font-semibold", active && "text-[#2d2926]")}>
+              <p className={clsx("text-sm font-medium", active && "text-[#1f1d1b]")}>
                 {option.label}
               </p>
-              <p className={clsx("mt-2 text-xs", active ? "text-[#2d2926]/70" : "text-white/60")}>
+              <p className={clsx("mt-2 text-xs", active ? "text-[#1f1d1b]/70" : "text-white/60")}>
                 {option.description}
               </p>
             </button>
@@ -1269,13 +1262,13 @@ function MissionStep({
     <div className="flex flex-col gap-6">
       <StepHeader meta={meta} />
       <div className="space-y-2">
-        <label className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
+        <label className="text-xs font-medium text-white/70">
           Missão (140–360 caracteres)
         </label>
         <textarea
           rows={6}
           placeholder="Descreva o propósito essencial da organização..."
-          className="w-full rounded-2xl border border-white/15 bg-black/30 px-4 py-3 text-sm text-white shadow-inner focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/50"
+          className="w-full rounded-lg border border-white/15 bg-black/30 px-4 py-3 text-sm text-white shadow-inner focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/50"
           {...form.register("mission")}
         />
         <div className="flex justify-between text-xs text-white/50">
@@ -1302,13 +1295,13 @@ function VisionStep({
     <div className="flex flex-col gap-6">
       <StepHeader meta={meta} />
       <div className="space-y-2">
-        <label className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
+        <label className="text-xs font-medium text-white/70">
           Visão (140–360 caracteres)
         </label>
         <textarea
           rows={6}
           placeholder="Descreva o futuro desejado em 3–5 anos..."
-          className="w-full rounded-2xl border border-white/15 bg-black/30 px-4 py-3 text-sm text-white shadow-inner focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/50"
+          className="w-full rounded-lg border border-white/15 bg-black/30 px-4 py-3 text-sm text-white shadow-inner focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/50"
           {...form.register("vision")}
         />
         <div className="flex justify-between text-xs text-white/50">
@@ -1348,7 +1341,7 @@ function ReviewStep({
   return (
     <div className="flex flex-col gap-6">
       <StepHeader meta={meta} />
-      <div className="rounded-3xl border border-white/10 bg-black/30 p-5 shadow-inner">
+      <div className="rounded-xl border border-white/10 bg-black/30 p-5 shadow-inner">
         <dl className="grid gap-4 text-sm text-white/80 sm:grid-cols-2">
           <ReviewItem
             label="Empresa"
@@ -1390,13 +1383,13 @@ function ReviewStep({
       </div>
 
       <div className="space-y-2">
-        <label className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
+        <label className="text-xs font-medium text-white/70">
           Resumo executivo (opcional)
         </label>
         <textarea
           rows={4}
           placeholder="Destaque o seguinte passo após o onboarding..."
-          className="w-full rounded-2xl border border-white/15 bg-black/30 px-4 py-3 text-sm text-white shadow-inner focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/50"
+          className="w-full rounded-lg border border-white/15 bg-black/30 px-4 py-3 text-sm text-white shadow-inner focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/50"
           {...form.register("summary")}
         />
         <div className="flex justify-between text-xs text-white/50">
@@ -1409,7 +1402,7 @@ function ReviewStep({
       </div>
 
       {errors.length ? (
-        <div className="rounded-2xl border border-yellow-400/40 bg-yellow-500/10 p-4 text-sm text-yellow-100">
+        <div className="rounded-lg border border-yellow-400/40 bg-yellow-500/10 p-4 text-sm text-yellow-100">
           <p className="font-semibold">Quase lá — revise antes de concluir:</p>
           <ul className="mt-2 space-y-1 text-xs">
             {errors.map((item) => (
@@ -1421,7 +1414,7 @@ function ReviewStep({
           </ul>
         </div>
       ) : (
-        <div className="rounded-2xl border border-emerald-400/40 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+        <div className="rounded-lg border border-emerald-400/40 bg-emerald-500/10 p-4 text-sm text-emerald-100">
           <p className="font-semibold">
             Tudo consistente! Conclua para liberar dashboards, ingestões e alertas.
           </p>
@@ -1434,11 +1427,11 @@ function ReviewStep({
 function StepHeader({ meta }: { meta: StepMeta }) {
   return (
     <div className="space-y-2">
-      <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-white/60">
+      <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-2.5 py-1 text-xs font-medium text-white/70">
         {meta.icon}
         {meta.label}
       </span>
-      <h2 className="font-display text-3xl text-white">{meta.title}</h2>
+      <h2 className="font-display text-2xl md:text-3xl text-white">{meta.title}</h2>
       <p className="max-w-2xl text-sm text-white/70">{meta.description}</p>
     </div>
   );
@@ -1454,13 +1447,13 @@ function ReviewCard({
   onEdit: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/30 p-4 text-sm text-white/70">
+    <div className="rounded-lg border border-white/10 bg-black/30 p-4 text-sm text-white/70">
       <div className="flex items-center justify-between">
         <p className="font-semibold text-white">{title}</p>
         <button
           type="button"
           onClick={onEdit}
-          className="text-xs font-semibold text-white/60 underline-offset-4 transition hover:text-white"
+          className="text-xs font-medium text-white/60 underline-offset-4 transition hover:text-white"
         >
           Editar
         </button>
@@ -1483,15 +1476,15 @@ function ReviewItem({
 }) {
   return (
     <div>
-      <p className="text-xs uppercase tracking-[0.35em] text-white/50">
+      <p className="text-xs text-white/60">
         {label}
       </p>
       <div className="mt-1 flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-white/90">{value}</p>
+        <p className="text-sm font-medium text-white/90">{value}</p>
         <button
           type="button"
           onClick={onClick}
-          className="text-xs font-semibold text-white/60 underline-offset-4 transition hover:text-white"
+          className="text-xs font-medium text-white/60 underline-offset-4 transition hover:text-white"
         >
           Editar
         </button>
@@ -1510,12 +1503,12 @@ function AutosaveIndicator({
   return (
     <div
       className={clsx(
-        "flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em]",
+        "flex items-center gap-2 rounded-full px-3 py-1 text-xs",
         isSaving
           ? "bg-white/10 text-white"
           : justSaved
-            ? "bg-emerald-500/20 text-emerald-100 transition"
-            : "bg-white/5 text-white/60"
+            ? "bg-emerald-500/10 text-emerald-100 transition"
+            : "bg-white/5 text-white/70"
       )}
     >
       {isSaving ? (
@@ -1523,11 +1516,7 @@ function AutosaveIndicator({
       ) : (
         <Check className="h-3.5 w-3.5" />
       )}
-      {isSaving
-        ? "Salvando..."
-        : justSaved
-          ? "Salvo"
-          : "Autosave ativo"}
+      {isSaving ? "Salvando..." : justSaved ? "Salvo" : "Salvamento automático"}
     </div>
   );
 }
@@ -1556,11 +1545,11 @@ function Stepper({
             type="button"
             onClick={() => onSelect(step.key)}
             className={clsx(
-              "flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition focus:outline-none focus:ring-2 focus:ring-white/60",
+              "flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition focus:outline-none focus:ring-2 focus:ring-white/40",
               active
-                ? "border-white bg-white text-[#2d2926] shadow-[0_24px_80px_rgba(255,255,255,0.2)]"
+                ? "border-white bg-white text-[#1f1d1b] shadow-sm"
                 : completed
-                  ? "border-emerald-400/50 bg-emerald-500/10 text-emerald-100 hover:border-emerald-300"
+                  ? "border-white/20 bg-white/5 text-white/80 hover:border-white/30"
                   : "border-white/10 bg-black/30 text-white/60 hover:border-white/25"
             )}
           >
@@ -1586,11 +1575,11 @@ function Stepper({
             <div className="flex-1">
               <p
                 className={clsx(
-                  "text-sm font-semibold",
+                  "text-sm font-medium",
                   active
                     ? "text-[#1f1b19]"
                     : completed
-                      ? "text-emerald-100"
+                      ? "text-white/80"
                       : "text-white/70"
                 )}
               >
@@ -1602,7 +1591,7 @@ function Stepper({
                   active
                     ? "text-[#1f1b19]/70"
                     : completed
-                      ? "text-emerald-100/70"
+                      ? "text-white/60"
                       : "text-white/40"
                 )}
               >
@@ -1622,7 +1611,7 @@ function LoadingState() {
       <div className="h-5 w-40 rounded-full bg-white/10" />
       <div className="h-10 w-3/4 rounded-xl bg-white/10" />
       <div className="h-10 w-2/3 rounded-xl bg-white/10" />
-      <div className="h-40 rounded-3xl bg-white/10" />
+      <div className="h-40 rounded-xl bg-white/10" />
     </div>
   );
 }
@@ -1634,23 +1623,9 @@ function AnimatedBackdrop({
 }) {
   return (
     <>
-      <div className="absolute inset-0 -z-20 bg-gradient-to-br from-[#0b0908] via-[#1a1614] to-[#2d2926]" />
-      {!prefersReducedMotion ? (
-        <>
-          <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.12),transparent_60%)]" />
-          <motion.div
-            className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_80%_10%,rgba(255,200,80,0.14),transparent_70%)]"
-            animate={{ opacity: [0.4, 0.7, 0.4], rotate: [0, 5, 0] }}
-            transition={{ duration: 22, repeat: Infinity, ease: "easeInOut" }}
-          />
-          <motion.div
-            className="pointer-events-none absolute inset-0 -z-10 bg-[conic-gradient(from_120deg_at_50%_50%,rgba(255,255,255,0.06),transparent_65%)]"
-            animate={{ rotate: [0, 360] }}
-            transition={{ duration: 80, repeat: Infinity, ease: "linear" }}
-          />
-        </>
-      ) : null}
-      <div className="absolute inset-0 -z-5 bg-black/35 backdrop-blur-[6px]" />
+      <div className="absolute inset-0 -z-20 bg-gradient-to-b from-[#0c0b0a] to-[#151312]" />
+      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.06),transparent_60%)]" />
+      <div className="absolute inset-0 -z-5 bg-black/30 backdrop-blur-[4px]" />
     </>
   );
 }
@@ -1662,23 +1637,19 @@ function CelebrationFooter({
 }) {
   return (
     <div className="flex flex-col items-center gap-3 border-t border-white/10 bg-black/40 px-6 py-8 text-center sm:px-10">
-      <div className="flex items-center gap-3 text-emerald-100">
-        <Medal className="h-5 w-5" />
-        <p className="font-semibold uppercase tracking-[0.4em]">
-          Onboarding completo
-        </p>
+      <div className="flex items-center gap-3 text-white/80">
+        <Check className="h-5 w-5" />
+        <p className="text-sm font-medium">Onboarding concluído</p>
       </div>
-      <h3 className="font-display text-3xl text-white">
-        Bem-vindo à próxima fase!
+      <h3 className="font-display text-2xl md:text-3xl text-white">
+        Configuração finalizada
       </h3>
       <p className="max-w-xl text-sm text-white/70">
-        Estamos preparando seus dashboards, métricas e ingestões com base nos
-        dados informados. Você será redirecionado automaticamente em instantes.
+        Preparando os dashboards e os recursos da conta. Você será
+        redirecionado em instantes.
       </p>
       {prefersReducedMotion ? null : (
-        <p className="text-xs uppercase tracking-[0.3em] text-white/50">
-          redirecionando...
-        </p>
+        <p className="text-xs text-white/50">redirecionando…</p>
       )}
     </div>
   );
@@ -1691,53 +1662,9 @@ function ConfettiBurst({
   active: boolean;
   prefersReducedMotion: boolean;
 }) {
-  if (!active || prefersReducedMotion) {
-    return null;
-  }
-  const pieces = Array.from({ length: 120 });
-  return (
-    <div className="pointer-events-none fixed inset-0 z-50">
-      {pieces.map((_, index) => {
-        const left = Math.random() * 100;
-        const delay = Math.random() * 0.6;
-        const duration = 1.2 + Math.random() * 0.6;
-        const color = index % 3 === 0 ? "#fde68a" : index % 3 === 1 ? "#f97316" : "#f9fafb";
-        return (
-          <span
-            key={index}
-            style={{
-              left: `${left}%`,
-              animationDelay: `${delay}s`,
-              animationDuration: `${duration}s`,
-              backgroundColor: color
-            }}
-            className="absolute top-0 h-2 w-1 animate-confetti rounded-full opacity-0"
-          />
-        );
-      })}
-    </div>
-  );
+  // Experiência mais sóbria: sem confete na conclusão.
+  return null;
 }
 
 // animation keyframes via global CSS injection
-const confettiStyles = `
-@keyframes confettiFall {
-  0% { transform: translate3d(0,-10vh,0) rotate(0deg); opacity: 0; }
-  10% { opacity: 1; }
-  100% { transform: translate3d(0,110vh,0) rotate(360deg); opacity: 0; }
-}
-.animate-confetti {
-  animation-name: confettiFall;
-  animation-timing-function: linear;
-}
-`;
-
-if (typeof document !== "undefined") {
-  const id = "onboarding-confetti-style";
-  if (!document.getElementById(id)) {
-    const style = document.createElement("style");
-    style.id = id;
-    style.innerHTML = confettiStyles;
-    document.head.appendChild(style);
-  }
-}
+// Estilos de confete removidos, mantendo a conclusão mais discreta.
