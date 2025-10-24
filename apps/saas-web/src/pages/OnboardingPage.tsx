@@ -292,15 +292,14 @@ export function OnboardingPage() {
   const currentSession = sessionQuery.data;
 
   useEffect(() => {
-    if (!currentSession) {
-      return;
-    }
+    if (!currentSession) return;
 
     if (!initialized.current) {
       const answers = currentSession.state?.answers ?? {};
       const defaultsWithData: OnboardingFormValues = {
         companyName: answers.companyName ?? "",
-        country: answers.country ? findCountry(answers.country.code) ?? answers.country : null,
+        country:
+          answers.country ? findCountry(answers.country.code) ?? answers.country : null,
         segment: answers.segment ?? null,
         size: answers.size
           ? organizationSizes.find((option) => option.value === answers.size?.value) ??
@@ -308,14 +307,23 @@ export function OnboardingPage() {
           : null,
         mission: answers.mission ?? "",
         vision: answers.vision ?? "",
-        summary: answers.summary ?? ""
+        summary: answers.summary ?? "",
       };
       form.reset(defaultsWithData);
       initialized.current = true;
+      setCurrentStep(currentSession.step ?? "welcome");
+      return;
     }
 
-    setCurrentStep(currentSession.step ?? "welcome");
-  }, [currentSession, form]);
+    // Após inicialização, só sincronize com o servidor se ele estiver à frente
+    // do passo local (ex.: retomou em outro dispositivo).
+    const serverStep = currentSession.step ?? "welcome";
+    const serverIndex = stepOrder.indexOf(serverStep);
+    const localIndex = stepOrder.indexOf(currentStep);
+    if (serverIndex > localIndex) {
+      setCurrentStep(serverStep);
+    }
+  }, [currentSession, form, currentStep]);
 
   const autosaveMutation = useMutation({
     mutationFn: async (body: SaveStepRequest) => {
