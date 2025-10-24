@@ -477,10 +477,14 @@ export function OnboardingPage() {
     }
     const payload = buildPayloadForStep(currentStep, validation.values);
     if (payload) {
-      autosaveCache.current[currentStep] = JSON.stringify(
-        payload.payload ?? null
-      );
-      await autosaveMutation.mutateAsync(payload);
+      // Se um autosave já estiver em andamento, não bloqueie a navegação.
+      // Evita dupla chamada e mantém a experiência fluida.
+      if (!autosaveMutation.isPending) {
+        autosaveCache.current[currentStep] = JSON.stringify(
+          payload.payload ?? null
+        );
+        await autosaveMutation.mutateAsync(payload);
+      }
     }
 
     if (currentStep === "review") {
@@ -610,7 +614,7 @@ export function OnboardingPage() {
                     <button
                       type="button"
                       onClick={goToPrevious}
-                      disabled={isFirstStep || autosaveMutation.isPending || completeMutation.isPending}
+                      disabled={isFirstStep || completeMutation.isPending}
                       className="flex items-center justify-center gap-2 rounded-md border border-white/15 px-3 py-2 text-[13px] font-medium text-white/80 transition hover:border-white/30 disabled:cursor-not-allowed disabled:border-white/10 disabled:text-white/40"
                     >
                       <ArrowLeft className="h-4 w-4" />
@@ -619,7 +623,7 @@ export function OnboardingPage() {
                     <button
                       type="button"
                       onClick={goToNext}
-                      disabled={autosaveMutation.isPending || completeMutation.isPending}
+                      disabled={completeMutation.isPending}
                       className="flex items-center justify-center gap-2 rounded-md bg-white px-4 py-2 text-[13px] font-semibold text-[#1f1d1b] shadow-sm transition hover:bg-white/90 focus:outline-none focus:ring-2 focus:ring-white/60 disabled:cursor-not-allowed disabled:bg-white/60"
                     >
                       {completeMutation.isPending ? (
