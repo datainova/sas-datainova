@@ -889,65 +889,20 @@ function StepContent({
 function WelcomeStep({ onStart }: { onStart: () => void }) {
   const prefersReducedMotion = usePrefersReducedMotion();
   return (
-    <div className="flex flex-col gap-6">
-      <h2 className="font-display text-4xl text-white">
-        Configuração inicial da sua empresa
-      </h2>
-      <p className="max-w-2xl text-base text-white/70">
-        Vamos personalizar o DataInova Connect para refletir a identidade e
-        ambições da sua organização. São passos rápidos com autosave — você
-        pode pausar e retomar quando quiser.
+    <div className="flex flex-col gap-4">
+      <h2 className="font-display text-2xl text-white">Configuração inicial</h2>
+      <p className="max-w-xl text-sm text-white/70">
+        Vamos coletar algumas informações essenciais da sua empresa. O
+        salvamento é automático e você pode concluir depois.
       </p>
-      <ul className="grid gap-4 md:grid-cols-2">
-        {[
-          {
-            title: "Experiência consistente",
-            description: "Microinterações sutis para uma experiência fluida e objetiva.",
-            icon: <Check className="h-5 w-5 text-white/80" />
-          },
-          {
-            title: "Autosave inteligente",
-            description: "Cada alteração fica registrada instantaneamente com rastreabilidade completa.",
-            icon: <PenSquare className="h-5 w-5 text-white/80" />
-          },
-          {
-            title: "Governança garantida",
-            description: "Org, timezone, moeda e segmentação alinhados à governança multi-tenant.",
-            icon: <Flag className="h-5 w-5 text-white/80" />
-          },
-          {
-            title: "Acessibilidade AA",
-            description: "Teclado, contraste e prefers-reduced-motion respeitados por padrão.",
-            icon: <Check className="h-5 w-5 text-white/80" />
-          }
-        ].map((item) => (
-          <motion.li
-            key={item.title}
-            initial={{ opacity: 0, y: prefersReducedMotion ? 0 : 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: prefersReducedMotion ? 0.18 : 0.32 }}
-            className="rounded-lg border border-white/10 bg-black/30 p-5 shadow-sm backdrop-blur"
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10">
-                {item.icon}
-              </div>
-              <p className="font-semibold text-white">{item.title}</p>
-            </div>
-            <p className="mt-2 text-sm text-white/70">{item.description}</p>
-          </motion.li>
-        ))}
-      </ul>
-      <div>
-        <button
-          type="button"
-          onClick={onStart}
-          className="inline-flex items-center gap-2 rounded-lg bg-white px-6 py-3 text-sm font-semibold text-[#1f1d1b] shadow-sm transition hover:bg-white/90 focus:outline-none focus:ring-2 focus:ring-white/60"
-        >
-          Começar agora
-          <ArrowRight className="h-4 w-4" />
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={onStart}
+        className="inline-flex w-fit items-center gap-2 rounded-md bg-white px-4 py-2 text-[13px] font-semibold text-[#1f1d1b] shadow-sm transition hover:bg-white/90 focus:outline-none focus:ring-2 focus:ring-white/60"
+      >
+        Começar
+        <ArrowRight className="h-4 w-4" />
+      </button>
     </div>
   );
 }
