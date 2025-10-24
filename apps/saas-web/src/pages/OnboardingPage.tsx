@@ -511,14 +511,14 @@ export function OnboardingPage() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#0b0908] text-white">
+    <div className="relative min-h-screen overflow-hidden bg-[#0e0e0e] text-white">
       <AnimatedBackdrop prefersReducedMotion={prefersReducedMotion} />
-      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 pb-12 pt-8 sm:px-8">
-        <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-4xl flex-col px-4 pb-8 pt-6 sm:px-6">
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm text-white/70">DataInova Connect</p>
-            <h1 className="mt-2 font-display text-3xl sm:text-4xl">Onboarding</h1>
-            <p className="mt-2 max-w-2xl text-sm text-white/70 sm:text-base">
+            <h1 className="mt-1 font-display text-2xl sm:text-3xl">Onboarding</h1>
+            <p className="mt-1 max-w-2xl text-[13px] text-white/70 sm:text-sm">
               Configure os dados essenciais da sua organização para liberar
               painéis, alertas e recursos personalizados. As alterações são
               salvas automaticamente.
@@ -538,8 +538,8 @@ export function OnboardingPage() {
           </div>
         </header>
 
-        <div className="mt-10 flex flex-1 flex-col gap-6 lg:flex-row">
-          <aside className="w-full rounded-xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl lg:w-72">
+        <div className="mt-6 flex flex-1 flex-col gap-4 lg:flex-row">
+          <aside className="w-full rounded-md border border-white/10 bg-white/5 p-4 lg:w-60">
             <Stepper
               steps={stepsMeta}
               currentStep={currentStep}
@@ -550,21 +550,18 @@ export function OnboardingPage() {
           </aside>
 
           <main className="flex-1">
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/10 shadow-lg backdrop-blur-2xl">
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.16),_transparent_55%)]" />
-              <div className="relative px-6 py-8 sm:px-10 sm:py-12">
+            <div className="relative overflow-hidden rounded-md border border-white/10 bg-white/5 shadow">
+              <div className="relative px-5 py-6 sm:px-8 sm:py-8">
                 {notification ? (
                   <div
                     className={clsx(
-                      "mb-6 rounded-lg border px-4 py-3 text-sm shadow-sm",
-                      notification.type === "error" && "border-red-400/60 bg-red-500/10 text-red-100",
-                      notification.type === "success" && "border-emerald-400/60 bg-emerald-500/10 text-emerald-100",
-                      notification.type === "info" && "border-blue-400/60 bg-blue-500/10 text-blue-100"
+                      "mb-4 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-[13px] text-white/80",
+                      notification.type === "error" && "border-red-500/40 bg-red-500/10 text-red-100"
                     )}
                   >
-                    <p className="font-semibold">{notification.title}</p>
+                    <p className="font-medium">{notification.title}</p>
                     {notification.description ? (
-                      <p className="mt-1 text-xs opacity-80">
+                      <p className="mt-1 text-[12px] opacity-80">
                         {notification.description}
                       </p>
                     ) : null}
@@ -599,13 +596,13 @@ export function OnboardingPage() {
               </div>
 
               {!celebrating ? (
-                <footer className="relative flex flex-col gap-4 border-t border-white/10 bg-black/20 px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-10">
+                <footer className="relative flex flex-col gap-3 border-t border-white/10 bg-black/20 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
                   <div className="flex items-center gap-3">
                     <AutosaveIndicator
                       isSaving={autosaveMutation.isPending}
                       justSaved={justSaved}
                     />
-                    <span className="hidden text-xs text-white/50 sm:inline">
+                    <span className="hidden text-[12px] text-white/60 sm:inline">
                       Passo {currentIndex + 1} de {stepOrder.length}
                     </span>
                   </div>
@@ -614,7 +611,7 @@ export function OnboardingPage() {
                       type="button"
                       onClick={goToPrevious}
                       disabled={isFirstStep || autosaveMutation.isPending || completeMutation.isPending}
-                      className="flex items-center justify-center gap-2 rounded-lg border border-white/20 px-4 py-2 text-sm font-medium text-white/80 transition hover:border-white/40 disabled:cursor-not-allowed disabled:border-white/10 disabled:text-white/40"
+                      className="flex items-center justify-center gap-2 rounded-md border border-white/15 px-3 py-2 text-[13px] font-medium text-white/80 transition hover:border-white/30 disabled:cursor-not-allowed disabled:border-white/10 disabled:text-white/40"
                     >
                       <ArrowLeft className="h-4 w-4" />
                       Voltar
@@ -623,7 +620,7 @@ export function OnboardingPage() {
                       type="button"
                       onClick={goToNext}
                       disabled={autosaveMutation.isPending || completeMutation.isPending}
-                      className="flex items-center justify-center gap-2 rounded-lg bg-white px-5 py-2 text-sm font-semibold text-[#1f1d1b] shadow-sm transition hover:bg-white/90 focus:outline-none focus:ring-2 focus:ring-white/60 disabled:cursor-not-allowed disabled:bg-white/60"
+                      className="flex items-center justify-center gap-2 rounded-md bg-white px-4 py-2 text-[13px] font-semibold text-[#1f1d1b] shadow-sm transition hover:bg-white/90 focus:outline-none focus:ring-2 focus:ring-white/60 disabled:cursor-not-allowed disabled:bg-white/60"
                     >
                       {completeMutation.isPending ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -977,7 +974,7 @@ function CompanyStep({
           type="text"
           placeholder="Ex.: DataInova Connect"
           autoComplete="organization"
-          className="w-full rounded-lg border border-white/15 bg-black/30 px-4 py-3 text-sm text-white shadow-inner focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/50"
+          className="w-full rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-sm text-white shadow-inner focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/50"
           {...register("companyName")}
         />
         {errors.companyName?.message ? (
@@ -1036,7 +1033,7 @@ function CountryStep({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Busque por país (ex.: Brasil)"
-            className="w-full rounded-lg border border-white/15 bg-black/30 px-4 py-3 text-sm text-white shadow-inner focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/50"
+            className="w-full rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-sm text-white shadow-inner focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/50"
           />
           <Globe2 className="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
         </div>
@@ -1227,7 +1224,7 @@ function SizeStep({
               type="button"
               onClick={() => form.setValue("size", option, { shouldDirty: true })}
               className={clsx(
-                "rounded-lg border px-4 py-4 text-left text-sm transition focus:outline-none focus:ring-2 focus:ring-white/40",
+                "rounded-md border px-3 py-3 text-left text-sm transition focus:outline-none focus:ring-2 focus:ring-white/30",
                 active
                   ? "border-white bg-white text-[#1f1d1b] shadow-sm"
                   : "border-white/10 bg-black/30 text-white/70 hover:border-white/20"
@@ -1414,10 +1411,8 @@ function ReviewStep({
           </ul>
         </div>
       ) : (
-        <div className="rounded-lg border border-emerald-400/40 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-          <p className="font-semibold">
-            Tudo consistente! Conclua para liberar dashboards, ingestões e alertas.
-          </p>
+        <div className="rounded-md border border-white/15 bg-white/5 p-4 text-sm text-white/80">
+          <p className="font-medium">Tudo consistente. Você pode concluir.</p>
         </div>
       )}
     </div>
@@ -1504,11 +1499,7 @@ function AutosaveIndicator({
     <div
       className={clsx(
         "flex items-center gap-2 rounded-full px-3 py-1 text-xs",
-        isSaving
-          ? "bg-white/10 text-white"
-          : justSaved
-            ? "bg-emerald-500/10 text-emerald-100 transition"
-            : "bg-white/5 text-white/70"
+        isSaving ? "bg-white/10 text-white" : "bg-white/5 text-white/70"
       )}
     >
       {isSaving ? (
@@ -1535,7 +1526,7 @@ function Stepper({
   prefersReducedMotion: boolean;
 }) {
   return (
-    <nav className="flex flex-col gap-4">
+    <nav className="flex flex-col gap-2.5">
       {steps.map((step) => {
         const active = currentStep === step.key;
         const completed = completedSteps.has(step.key);
@@ -1545,7 +1536,7 @@ function Stepper({
             type="button"
             onClick={() => onSelect(step.key)}
             className={clsx(
-              "flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition focus:outline-none focus:ring-2 focus:ring-white/40",
+              "flex items-center gap-3 rounded-md border px-3 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-white/30",
               active
                 ? "border-white bg-white text-[#1f1d1b] shadow-sm"
                 : completed
@@ -1553,7 +1544,7 @@ function Stepper({
                   : "border-white/10 bg-black/30 text-white/60 hover:border-white/25"
             )}
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/30">
+            <div className="flex h-7 w-7 items-center justify-center rounded-full border border-white/20 bg-black/30">
               <AnimatePresence>
                 {completed ? (
                   <motion.div
@@ -1566,7 +1557,7 @@ function Stepper({
                     <Check className="h-4 w-4 text-current" />
                   </motion.div>
                 ) : (
-                  <span className="text-xs font-semibold text-current">
+                  <span className="text-[11px] font-medium text-current">
                     {stepOrder.indexOf(step.key) + 1}
                   </span>
                 )}
@@ -1587,7 +1578,7 @@ function Stepper({
               </p>
               <p
                 className={clsx(
-                  "text-xs",
+                  "text-[12px]",
                   active
                     ? "text-[#1f1b19]/70"
                     : completed
@@ -1621,13 +1612,8 @@ function AnimatedBackdrop({
 }: {
   prefersReducedMotion: boolean;
 }) {
-  return (
-    <>
-      <div className="absolute inset-0 -z-20 bg-gradient-to-b from-[#0c0b0a] to-[#151312]" />
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.06),transparent_60%)]" />
-      <div className="absolute inset-0 -z-5 bg-black/30 backdrop-blur-[4px]" />
-    </>
-  );
+  // Fundo minimalista (base já definida no container). Sem camadas extras.
+  return null;
 }
 
 function CelebrationFooter({
