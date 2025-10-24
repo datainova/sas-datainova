@@ -1,0 +1,533 @@
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  extensions = [citext, pgcrypto]
+}
+
+enum PeriodGranularity {
+  DAY      @map("DAY")
+  WEEK     @map("WEEK")
+  MONTH    @map("MONTH")
+  QUARTER  @map("QUARTER")
+  YEAR     @map("YEAR")
+
+  @@map("period_granularity")
+}
+
+enum IndicatorDirection {
+  UP     @map("UP")
+  DOWN   @map("DOWN")
+  RANGE  @map("RANGE")
+
+  @@map("indicator_direction")
+}
+
+enum IngestStatus {
+  RECEIVED  @map("RECEIVED")
+  VALIDATED @map("VALIDATED")
+  MERGED    @map("MERGED")
+  DUPLICATE @map("DUPLICATE")
+  CONFLICT  @map("CONFLICT")
+  ERROR     @map("ERROR")
+
+  @@map("ingest_status")
+}
+
+enum AlertSeverity {
+  INFO     @map("INFO")
+  WARN     @map("WARN")
+  CRITICAL @map("CRITICAL")
+
+  @@map("alert_severity")
+}
+
+enum AgentStatus {
+  ACTIVE   @map("ACTIVE")
+  INACTIVE @map("INACTIVE")
+  REVOKED  @map("REVOKED")
+
+  @@map("agent_status")
+}
+
+enum BillingPlan {
+  FREE        @map("FREE")
+  PRO         @map("PRO")
+  ENTERPRISE  @map("ENTERPRISE")
+
+  @@map("billing_plan")
+}
+
+enum OrganizationSize {
+  SIZE_1_10      @map("SIZE_1_10")
+  SIZE_11_50     @map("SIZE_11_50")
+  SIZE_51_200    @map("SIZE_51_200")
+  SIZE_201_1000  @map("SIZE_201_1000")
+  SIZE_1001_PLUS @map("SIZE_1001_PLUS")
+
+  @@map("organization_size")
+}
+
+enum RoleType {
+  OWNER   @map("OWNER")
+  ADMIN   @map("ADMIN")
+  EDITOR  @map("EDITOR")
+  VIEWER  @map("VIEWER")
+  MEMBER  @map("MEMBER")
+
+  @@map("role_type")
+}
+
+enum WebhookSource {
+  STRIPE   @map("STRIPE")
+  HUBSPOT  @map("HUBSPOT")
+  INTERNAL @map("INTERNAL")
+
+  @@map("webhook_source")
+}
+
+model Organization {
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String       @unique(map: "uq_organization_name") @db.Text
+  nickname    String?      @unique(map: "uq_organization_nickname") @db.Citext
+  tz          String       @db.Text
+  currency    String       @db.Text
+  locale      String       @db.Text
+  countryCode String?      @map("country_code") @db.Text
+  countryName String?      @map("country_name") @db.Text
+  segmentKey  String?      @map("segment_key") @db.Text
+  segmentLabel String?     @map("segment_label") @db.Text
+  size        OrganizationSize? @map("size")
+  sizeLabel   String?      @map("size_label") @db.Text
+  mission     String?      @db.Text
+  vision      String?      @db.Text
+  summary     String?      @db.Text
+  onboardingCompletedAt DateTime? @map("onboarding_completed_at") @db.Timestamptz(6)
+  billingPlan BillingPlan  @default(PRO) @map("billing_plan")
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  members            OrganizationMember[]
+  invites            Invite[]
+  objectives         Objective[]
+  indicatorDefs      IndicatorDefinition[] @relation("OrgIndicators")
+  indicatorTargets   IndicatorTarget[]
+  indicatorValues    IndicatorValue[]
+  agents             Agent[]
+  ingestBatches      IngestBatch[]
+  auditLogs          AuditLog[]
+  dqViolations       DqViolation[]
+  alertEvents        AlertEvent[]
+  checkins           Checkin[]
+  webhookEvents      WebhookEvent[]
+  stripeCustomer     StripeCustomer?
+  onboardingSessions OnboardingSession[]
+
+  @@map("organization")
+  @@index([createdAt], map: "ix_organization_created_at")
+}
+
+model UserAccount {
+  id           String     @id @default(uuid()) @db.Uuid
+  email        String     @unique(map: "uq_user_email") @db.Citext
+  name         String?    @db.Text
+  passwordHash String?    @map("password_hash") @db.Text
+  isActive     Boolean    @default(false) @map("is_active")
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  identities   UserIdentity[]
+  memberships  OrganizationMember[]
+  ownedObjectives Objective[]    @relation("ObjectiveOwner")
+  auditEntries AuditLog[]        @relation("AuditActor")
+  checkins     Checkin[]
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens PasswordResetToken[]
+  refreshTokens RefreshToken[]
+  onboardingSessions OnboardingSession[]
+
+  @@map("user_account")
+  @@index([createdAt], map: "ix_user_created_at")
+}
+
+model UserIdentity {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid @map("user_id")
+  provider  String   @db.Text
+  subject   String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user UserAccount @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_identity")
+  @@unique([provider, subject], map: "uq_identity_provider_subject")
+  @@index([userId], map: "ix_identity_user_id")
+}
+
+model OrganizationMember {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid @map("organization_id")
+  userId         String   @db.Uuid @map("user_id")
+  role           RoleType @default(MEMBER)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         UserAccount  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("organization_member")
+  @@unique([organizationId, userId], map: "uq_member_org_user")
+  @@index([organizationId, role], map: "ix_member_org_role")
+}
+
+model Invite {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid @map("organization_id")
+  email          String   @db.Citext
+  role           RoleType @default(VIEWER)
+  token          String   @db.Text
+  expiresAt      DateTime @db.Timestamptz(6) @map("expires_at")
+  acceptedAt     DateTime? @db.Timestamptz(6) @map("accepted_at")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("invite")
+  @@unique([organizationId, email], map: "uq_invite_org_email")
+  @@index([expiresAt], map: "ix_invite_expires_at")
+}
+
+model OnboardingSession {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String?  @db.Uuid @map("organization_id")
+  userId         String   @db.Uuid @map("user_id")
+  state          Json     @db.JsonB
+  step           String   @db.Text
+  status         String   @default("ACTIVE") @db.Text
+  completedAt    DateTime? @map("completed_at") @db.Timestamptz(6)
+  createdAt      DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt      DateTime @default(now()) @db.Timestamptz(6) @map("updated_at")
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  user         UserAccount    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("onboarding_session")
+  @@index([userId], map: "ix_onboarding_user")
+  @@index([status], map: "ix_onboarding_status")
+}
+
+model Objective {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid @map("organization_id")
+  name           String    @db.Text
+  description    String?   @db.Text
+  ownerId        String?   @db.Uuid @map("owner_id")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  owner        UserAccount?      @relation("ObjectiveOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  indicators   IndicatorDefinition[]
+
+  @@map("objective")
+  @@index([organizationId, createdAt], map: "ix_objective_org_created")
+}
+
+model IndicatorDefinition {
+  id                String             @id @default(uuid()) @db.Uuid
+  organizationId    String             @db.Uuid @map("organization_id")
+  objectiveId       String?            @db.Uuid @map("objective_id")
+  code              String             @db.Text
+  name              String             @db.Text
+  direction         IndicatorDirection
+  granularityDefault PeriodGranularity @map("granularity_default")
+  tolerance         Decimal?           @db.Decimal(12, 6)
+  unit              String?            @db.Text
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation("OrgIndicators", fields: [organizationId], references: [id], onDelete: Cascade)
+  objective    Objective?   @relation(fields: [objectiveId], references: [id], onDelete: SetNull)
+  targets      IndicatorTarget[]
+  values       IndicatorValue[]
+  dqViolations DqViolation[]
+  ingestItems  IngestItem[]
+  alertEvents  AlertEvent[]
+  checkins     Checkin[]
+
+  @@map("indicator_definition")
+  @@unique([organizationId, code], map: "uq_indicator_code")
+  @@index([organizationId, objectiveId], map: "ix_indicator_org_obj")
+}
+
+model IndicatorTarget {
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @db.Uuid @map("organization_id")
+  indicatorId    String             @db.Uuid @map("indicator_id")
+  periodStartUtc DateTime           @map("period_start_utc") @db.Timestamptz(6)
+  granularity    PeriodGranularity
+  segmentKey     Json?              @map("segment_key")
+  segmentHash    Bytes?             @map("segment_hash")
+  targetValue    Decimal            @map("target_value") @db.Decimal(20, 6)
+  toleranceOverride Decimal?        @map("tolerance_override") @db.Decimal(12, 6)
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  indicator    IndicatorDefinition  @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
+
+  @@map("indicator_target")
+  @@unique([organizationId, indicatorId, periodStartUtc, segmentHash], map: "uq_indicator_target_key")
+  @@index([organizationId, periodStartUtc], map: "ix_indicator_target_period")
+}
+
+model IndicatorValue {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @db.Uuid @map("organization_id")
+  indicatorId    String            @db.Uuid @map("indicator_id")
+  periodStartUtc DateTime          @map("period_start_utc") @db.Timestamptz(6)
+  periodMonth    DateTime          @map("period_month") @db.Timestamptz(6) @ignore
+  granularity    PeriodGranularity
+  segmentKey     Json              @map("segment_key")
+  segmentHash    Bytes             @map("segment_hash")
+  value          Decimal           @db.Decimal(20, 6)
+  version        Int               @default(1)
+  source         String            @db.Text
+  lineageBatchId String?           @map("lineage_batch_id") @db.Text
+  lineageChecksum String?          @map("lineage_checksum") @db.Text
+  ingestedAt     DateTime          @map("ingested_at") @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  indicator    IndicatorDefinition @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
+  ingestBatch   IngestBatch?       @relation("IndicatorIngest", fields: [organizationId, lineageBatchId], references: [organizationId, batchId], onDelete: SetNull)
+
+  @@map("indicator_value")
+  @@unique([organizationId, indicatorId, periodStartUtc, segmentHash, version], map: "uq_indicator_value_version")
+  @@index([organizationId, indicatorId, periodStartUtc], map: "ix_indicator_value_lookup")
+  @@index([organizationId, periodStartUtc], map: "ix_indicator_value_period")
+}
+
+model IndicatorValueLatest {
+  organizationId String            @db.Uuid @map("organization_id")
+  indicatorId    String            @db.Uuid @map("indicator_id")
+  periodStartUtc DateTime          @map("period_start_utc") @db.Timestamptz(6)
+  granularity    PeriodGranularity
+  segmentKey     Json              @map("segment_key")
+  segmentHash    Bytes             @map("segment_hash")
+  value          Decimal           @db.Decimal(20, 6)
+  version        Int
+
+  @@map("indicator_value_latest")
+  @@id([organizationId, indicatorId, periodStartUtc, segmentHash])
+  @@ignore
+}
+
+model Agent {
+  id             String      @id @default(uuid()) @db.Uuid
+  organizationId String      @db.Uuid @map("organization_id")
+  name           String      @db.Text
+  status         AgentStatus
+  secretHash     String      @map("secret_hash") @db.Text
+  metadata       Json?       @db.JsonB
+  lastSeenAt     DateTime?   @map("last_seen_at") @db.Timestamptz(6)
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ingestBatches IngestBatch[]
+
+  @@map("agent")
+  @@index([organizationId, status], map: "ix_agent_org_status")
+}
+
+model IngestBatch {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid @map("organization_id")
+  agentId        String?       @db.Uuid @map("agent_id")
+  batchId        String        @map("batch_id") @db.Text
+  checksum       String        @db.Text
+  status         IngestStatus
+  receivedAt     DateTime      @map("received_at") @default(now()) @db.Timestamptz(6)
+  mergedAt       DateTime?     @map("merged_at") @db.Timestamptz(6)
+  errorMessage   String?       @map("error_message") @db.Text
+  itemsCount     Int           @default(0) @map("items_count")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  agent        Agent?       @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  items        IngestItem[]
+  indicatorValues IndicatorValue[] @relation("IndicatorIngest")
+
+  @@map("ingest_batch")
+  @@unique([organizationId, batchId], map: "uq_ingest_batch_id")
+  @@index([organizationId, status], map: "ix_ingest_batch_status")
+}
+
+model IngestItem {
+  id             String            @id @default(uuid()) @db.Uuid
+  ingestBatchId  String            @db.Uuid @map("ingest_batch_id")
+  indicatorId    String            @db.Uuid @map("indicator_id")
+  periodStartUtc DateTime          @map("period_start_utc") @db.Timestamptz(6)
+  granularity    PeriodGranularity
+  segmentKey     Json              @map("segment_key")
+  segmentHash    Bytes             @map("segment_hash")
+  value          Decimal           @db.Decimal(20, 6)
+  validation     Json?             @db.JsonB
+  status         IngestStatus
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  ingestBatch IngestBatch       @relation(fields: [ingestBatchId], references: [id], onDelete: Cascade)
+  indicator   IndicatorDefinition @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
+
+  @@map("ingest_item")
+  @@index([ingestBatchId], map: "ix_ingest_item_batch")
+  @@index([indicatorId, periodStartUtc], map: "ix_ingest_item_indicator_period")
+}
+
+model AuditLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid @map("organization_id")
+  actor          String   @db.Text
+  action         String   @db.Text
+  entity         String   @db.Text
+  entityId       String?  @db.Uuid @map("entity_id")
+  diff           Json?    @db.JsonB
+  requestId      String?  @map("request_id") @db.Text
+  traceId        String?  @map("trace_id") @db.Text
+  at             DateTime @default(now()) @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actorUser    UserAccount? @relation("AuditActor", fields: [actor], references: [id])
+
+  @@map("audit_log")
+  @@index([organizationId, at], map: "ix_audit_org_at")
+  @@index([entity, entityId], map: "ix_audit_entity")
+}
+
+model DqViolation {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid @map("organization_id")
+  indicatorId    String?       @db.Uuid @map("indicator_id")
+  periodStartUtc DateTime?     @map("period_start_utc") @db.Timestamptz(6)
+  segmentHash    Bytes?        @map("segment_hash")
+  rule           String        @db.Text
+  severity       AlertSeverity
+  details        Json?         @db.JsonB
+  detectedAt     DateTime      @map("detected_at") @default(now()) @db.Timestamptz(6)
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  indicator    IndicatorDefinition? @relation(fields: [indicatorId], references: [id], onDelete: SetNull)
+
+  @@map("dq_violation")
+  @@index([organizationId, indicatorId, detectedAt], map: "ix_dq_org_indicator")
+  @@index([rule, severity], map: "ix_dq_rule_severity")
+}
+
+model AlertEvent {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid @map("organization_id")
+  indicatorId    String?       @db.Uuid @map("indicator_id")
+  severity       AlertSeverity
+  kind           String        @db.Text
+  message        String        @db.Text
+  context        Json?         @db.JsonB
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  indicator    IndicatorDefinition? @relation(fields: [indicatorId], references: [id], onDelete: SetNull)
+
+  @@map("alert_event")
+  @@index([organizationId, createdAt], map: "ix_alert_org_created")
+}
+
+model Checkin {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid @map("organization_id")
+  userId         String   @db.Uuid @map("user_id")
+  indicatorId    String?  @db.Uuid @map("indicator_id")
+  note           String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         UserAccount        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  indicator    IndicatorDefinition? @relation(fields: [indicatorId], references: [id], onDelete: SetNull)
+
+  @@map("checkin")
+  @@index([organizationId, createdAt], map: "ix_checkin_org_created")
+}
+
+model StripeCustomer {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @unique(map: "uq_stripe_org") @db.Uuid @map("organization_id")
+  customerId     String   @map("customer_id") @db.Text
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("stripe_customer")
+}
+
+model WebhookEvent {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String?       @db.Uuid @map("organization_id")
+  source         WebhookSource
+  externalId     String        @map("external_id") @db.Text
+  payload        Json          @db.JsonB
+  receivedAt     DateTime      @map("received_at") @default(now()) @db.Timestamptz(6)
+  processedAt    DateTime?     @map("processed_at") @db.Timestamptz(6)
+  status         String        @db.Text
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@map("webhook_event")
+  @@unique([source, externalId], map: "uq_webhook_source_external")
+  @@index([organizationId, receivedAt], map: "ix_webhook_org_received")
+}
+
+model EmailVerificationToken {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid @map("user_id")
+  tokenHash  String   @map("token_hash") @db.Text
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(6)
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user UserAccount @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("email_verification_token")
+  @@unique([tokenHash], map: "uq_email_verification_hash")
+  @@index([expiresAt], map: "ix_email_verification_expires")
+}
+
+model PasswordResetToken {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid @map("user_id")
+  tokenHash  String   @map("token_hash") @db.Text
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(6)
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user UserAccount @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_reset_token")
+  @@unique([tokenHash], map: "uq_password_token_hash")
+  @@index([expiresAt], map: "ix_password_expires")
+}
+
+model RefreshToken {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid @map("user_id")
+  tokenHash  String   @map("token_hash") @db.Text
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(6)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user UserAccount @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_token")
+  @@unique([tokenHash], map: "uq_refresh_token_hash")
+  @@index([userId], map: "ix_refresh_user")
+  @@index([expiresAt], map: "ix_refresh_expires")
+}

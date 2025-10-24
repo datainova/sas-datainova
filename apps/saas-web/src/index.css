@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --brand: #2d2926;
+  --on-brand: #ffffff;
+  --bg: #ffffff;
+  --fg: #2d2926;
+  --accent: #b86e00;
+  --shadow-soft: 0 16px 48px rgba(45, 41, 38, 0.18);
+  --radius-lg: 16px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+}
+
+@font-face {
+  font-family: "Jaapokki";
+  src: url("/fonts/jaapokki.woff2") format("woff2");
+  font-display: swap;
+}
+
+body {
+  font-family: var(--font-sans, "Exo 2", system-ui, -apple-system, sans-serif);
+  background-color: var(--bg);
+  color: var(--fg);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+::selection {
+  background-color: rgba(45, 41, 38, 0.16);
+  color: var(--brand);
+}

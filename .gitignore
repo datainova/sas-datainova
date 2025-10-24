@@ -1,0 +1,33 @@
+# Node / package managers
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/
+
+# Build artifacts
+dist/
+build/
+coverage/
+*.tsbuildinfo
+*.log
+
+# Turbo / caches
+.turbo/
+
+# Temp & local
+tmp/
+.tmp/
+*.pid
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files (keep .env.example tracked)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+apps/**/.env
+

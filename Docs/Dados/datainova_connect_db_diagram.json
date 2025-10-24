@@ -1,0 +1,2488 @@
+{
+  "version": "1.0.0",
+  "generated_at_utc": "2025-10-22T19:24:32.359881Z",
+  "database": {
+    "vendor": "PostgreSQL",
+    "version": "16"
+  },
+  "conventions": {
+    "timezone": "Store timestamps as timestamptz (UTC). Normalize period_start at org tz then convert to UTC.",
+    "naming": "snake_case for columns; *_id for FK columns; created_at/updated_at on mutable tables.",
+    "tenant_context": "SET LOCAL app.organization_id = '<uuid>' per transaction; RLS on all multi-tenant tables."
+  },
+  "types": {
+    "enums": {
+      "period_granularity": [
+        "DAY",
+        "WEEK",
+        "MONTH",
+        "QUARTER",
+        "YEAR"
+      ],
+      "indicator_direction": [
+        "UP",
+        "DOWN",
+        "RANGE"
+      ],
+      "ingest_status": [
+        "RECEIVED",
+        "VALIDATED",
+        "MERGED",
+        "DUPLICATE",
+        "CONFLICT",
+        "ERROR"
+      ],
+      "alert_severity": [
+        "INFO",
+        "WARN",
+        "CRITICAL"
+      ],
+      "agent_status": [
+        "ACTIVE",
+        "INACTIVE",
+        "REVOKED"
+      ],
+      "role_type": [
+        "OWNER",
+        "ADMIN",
+        "EDITOR",
+        "VIEWER"
+      ],
+      "webhook_source": [
+        "STRIPE",
+        "HUBSPOT",
+        "INTERNAL"
+      ]
+    }
+  },
+  "tables": [
+    {
+      "name": "organization",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "tz",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "currency",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "locale",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_organization_name",
+          "columns": [
+            "name"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_organization_created_at",
+          "columns": [
+            "created_at"
+          ],
+          "method": "btree"
+        }
+      ],
+      "rls": {
+        "enabled": true,
+        "policies": [
+          {
+            "name": "org_self",
+            "command": "ALL",
+            "using": "id = current_setting('app.organization_id')::uuid",
+            "check": "id = current_setting('app.organization_id')::uuid"
+          }
+        ]
+      }
+    },
+    {
+      "name": "user_account",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "email",
+          "type": "citext",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "password_hash",
+          "type": "text",
+          "nullable": true,
+          "comment": "argon2id; null for SSO-only users"
+        },
+        {
+          "name": "is_active",
+          "type": "boolean",
+          "nullable": false,
+          "default": "true"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_user_email",
+          "columns": [
+            "email"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_user_created_at",
+          "columns": [
+            "created_at"
+          ],
+          "method": "btree"
+        }
+      ],
+      "rls": {
+        "enabled": false
+      }
+    },
+    {
+      "name": "user_identity",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "provider",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "subject",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "user_id"
+          ],
+          "references": {
+            "table": "user_account",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        }
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_identity_provider_subject",
+          "columns": [
+            "provider",
+            "subject"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_identity_user_id",
+          "columns": [
+            "user_id"
+          ],
+          "method": "btree"
+        }
+      ],
+      "rls": {
+        "enabled": false
+      }
+    },
+    {
+      "name": "organization_member",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "organization_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "role",
+          "type": "role_type",
+          "nullable": false,
+          "default": "'MEMBER'"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "organization_id"
+          ],
+          "references": {
+            "table": "organization",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        },
+        {
+          "columns": [
+            "user_id"
+          ],
+          "references": {
+            "table": "user_account",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        }
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_member_org_user",
+          "columns": [
+            "organization_id",
+            "user_id"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_member_org_role",
+          "columns": [
+            "organization_id",
+            "role"
+          ],
+          "method": "btree"
+        }
+      ],
+      "rls": {
+        "enabled": true,
+        "policies": [
+          {
+            "name": "member_tenant",
+            "command": "ALL",
+            "using": "organization_id = current_setting('app.organization_id')::uuid",
+            "check": "organization_id = current_setting('app.organization_id')::uuid"
+          }
+        ]
+      }
+    },
+    {
+      "name": "invite",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "organization_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "email",
+          "type": "citext",
+          "nullable": false
+        },
+        {
+          "name": "role",
+          "type": "role_type",
+          "nullable": false,
+          "default": "'VIEWER'"
+        },
+        {
+          "name": "token_hash",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "expires_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "accepted_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "organization_id"
+          ],
+          "references": {
+            "table": "organization",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        }
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_invite_org_email",
+          "columns": [
+            "organization_id",
+            "email"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_invite_expires_at",
+          "columns": [
+            "expires_at"
+          ],
+          "method": "btree"
+        }
+      ],
+      "rls": {
+        "enabled": true,
+        "policies": [
+          {
+            "name": "invite_tenant",
+            "command": "ALL",
+            "using": "organization_id = current_setting('app.organization_id')::uuid",
+            "check": "organization_id = current_setting('app.organization_id')::uuid"
+          }
+        ]
+      }
+    },
+    {
+      "name": "objective",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "organization_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "owner_id",
+          "type": "uuid",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "organization_id"
+          ],
+          "references": {
+            "table": "organization",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        },
+        {
+          "columns": [
+            "owner_id"
+          ],
+          "references": {
+            "table": "user_account",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "set null"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_objective_org_name",
+          "columns": [
+            "organization_id",
+            "name"
+          ],
+          "method": "btree"
+        }
+      ],
+      "rls": {
+        "enabled": true,
+        "policies": [
+          {
+            "name": "objective_tenant",
+            "command": "ALL",
+            "using": "organization_id = current_setting('app.organization_id')::uuid",
+            "check": "organization_id = current_setting('app.organization_id')::uuid"
+          }
+        ]
+      }
+    },
+    {
+      "name": "indicator_definition",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "organization_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "objective_id",
+          "type": "uuid",
+          "nullable": true
+        },
+        {
+          "name": "code",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "direction",
+          "type": "indicator_direction",
+          "nullable": false
+        },
+        {
+          "name": "granularity_default",
+          "type": "period_granularity",
+          "nullable": false
+        },
+        {
+          "name": "tolerance",
+          "type": "numeric(12,6)",
+          "nullable": true
+        },
+        {
+          "name": "unit",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "organization_id"
+          ],
+          "references": {
+            "table": "organization",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        },
+        {
+          "columns": [
+            "objective_id"
+          ],
+          "references": {
+            "table": "objective",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "set null"
+        }
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_indicator_code",
+          "columns": [
+            "organization_id",
+            "code"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_indicator_org_obj",
+          "columns": [
+            "organization_id",
+            "objective_id"
+          ],
+          "method": "btree"
+        }
+      ],
+      "rls": {
+        "enabled": true,
+        "policies": [
+          {
+            "name": "indicator_tenant",
+            "command": "ALL",
+            "using": "organization_id = current_setting('app.organization_id')::uuid",
+            "check": "organization_id = current_setting('app.organization_id')::uuid"
+          }
+        ]
+      }
+    },
+    {
+      "name": "indicator_target",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "organization_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "indicator_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "period_start_utc",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "granularity",
+          "type": "period_granularity",
+          "nullable": false
+        },
+        {
+          "name": "segment_key",
+          "type": "jsonb",
+          "nullable": true
+        },
+        {
+          "name": "segment_hash",
+          "type": "bytea",
+          "nullable": true
+        },
+        {
+          "name": "target_value",
+          "type": "numeric(20,6)",
+          "nullable": false
+        },
+        {
+          "name": "tolerance_override",
+          "type": "numeric(12,6)",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "organization_id"
+          ],
+          "references": {
+            "table": "organization",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        },
+        {
+          "columns": [
+            "indicator_id"
+          ],
+          "references": {
+            "table": "indicator_definition",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        }
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_target_business_key",
+          "columns": [
+            "organization_id",
+            "indicator_id",
+            "period_start_utc",
+            "segment_hash"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_target_org_indicator_period",
+          "columns": [
+            "organization_id",
+            "indicator_id",
+            "period_start_utc"
+          ],
+          "method": "btree"
+        },
+        {
+          "name": "ix_target_segment_hash",
+          "columns": [
+            "segment_hash"
+          ],
+          "method": "btree"
+        },
+        {
+          "name": "ix_target_segment_key",
+          "columns": [
+            "segment_key"
+          ],
+          "method": "gin",
+          "using": "jsonb_path_ops"
+        }
+      ],
+      "rls": {
+        "enabled": true,
+        "policies": [
+          {
+            "name": "target_tenant",
+            "command": "ALL",
+            "using": "organization_id = current_setting('app.organization_id')::uuid",
+            "check": "organization_id = current_setting('app.organization_id')::uuid"
+          }
+        ]
+      }
+    },
+    {
+      "name": "indicator_value",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "organization_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "indicator_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "period_start_utc",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "granularity",
+          "type": "period_granularity",
+          "nullable": false
+        },
+        {
+          "name": "segment_key",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "segment_hash",
+          "type": "bytea",
+          "nullable": false
+        },
+        {
+          "name": "value",
+          "type": "numeric(20,6)",
+          "nullable": false
+        },
+        {
+          "name": "version",
+          "type": "int",
+          "nullable": false,
+          "default": "1"
+        },
+        {
+          "name": "source",
+          "type": "text",
+          "nullable": false,
+          "check": "source in ('agent','saas','manual')"
+        },
+        {
+          "name": "lineage_batch_id",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "lineage_checksum",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "ingested_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "organization_id"
+          ],
+          "references": {
+            "table": "organization",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        },
+        {
+          "columns": [
+            "indicator_id"
+          ],
+          "references": {
+            "table": "indicator_definition",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        }
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_indicator_value_business_key",
+          "columns": [
+            "organization_id",
+            "indicator_id",
+            "period_start_utc",
+            "segment_hash",
+            "version"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_iv_org_indicator_period",
+          "columns": [
+            "organization_id",
+            "indicator_id",
+            "period_start_utc"
+          ],
+          "method": "btree",
+          "local": true
+        },
+        {
+          "name": "ix_iv_segment_hash",
+          "columns": [
+            "segment_hash"
+          ],
+          "method": "btree",
+          "local": true
+        },
+        {
+          "name": "ix_iv_segment_key",
+          "columns": [
+            "segment_key"
+          ],
+          "method": "gin",
+          "using": "jsonb_path_ops",
+          "local": true
+        }
+      ],
+      "partitioning": {
+        "type": "range",
+        "expression": "date_trunc('month', period_start_utc)",
+        "interval": "1 month"
+      },
+      "rls": {
+        "enabled": true,
+        "policies": [
+          {
+            "name": "iv_tenant",
+            "command": "ALL",
+            "using": "organization_id = current_setting('app.organization_id')::uuid",
+            "check": "organization_id = current_setting('app.organization_id')::uuid"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ingest_batch",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "organization_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "agent_id",
+          "type": "uuid",
+          "nullable": true
+        },
+        {
+          "name": "batch_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "checksum",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "received_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "status",
+          "type": "ingest_status",
+          "nullable": false,
+          "default": "'RECEIVED'"
+        },
+        {
+          "name": "error",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "items",
+          "type": "int",
+          "nullable": false,
+          "default": "0"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "organization_id"
+          ],
+          "references": {
+            "table": "organization",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        },
+        {
+          "columns": [
+            "agent_id"
+          ],
+          "references": {
+            "table": "agent",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "set null"
+        }
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_ingest_batch_id",
+          "columns": [
+            "organization_id",
+            "batch_id",
+            "checksum"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_ingest_batch_org_received",
+          "columns": [
+            "organization_id",
+            "received_at"
+          ],
+          "method": "btree"
+        },
+        {
+          "name": "ix_ingest_batch_status",
+          "columns": [
+            "status"
+          ],
+          "method": "btree"
+        }
+      ],
+      "rls": {
+        "enabled": true,
+        "policies": [
+          {
+            "name": "ingest_batch_tenant",
+            "command": "ALL",
+            "using": "organization_id = current_setting('app.organization_id')::uuid",
+            "check": "organization_id = current_setting('app.organization_id')::uuid"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ingest_item",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "ingest_batch_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "indicator_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "period_start_utc",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "granularity",
+          "type": "period_granularity",
+          "nullable": false
+        },
+        {
+          "name": "segment_key",
+          "type": "jsonb",
+          "nullable": true
+        },
+        {
+          "name": "segment_hash",
+          "type": "bytea",
+          "nullable": true
+        },
+        {
+          "name": "value",
+          "type": "numeric(20,6)",
+          "nullable": false
+        },
+        {
+          "name": "validation",
+          "type": "jsonb",
+          "nullable": true
+        },
+        {
+          "name": "status",
+          "type": "ingest_status",
+          "nullable": false,
+          "default": "'RECEIVED'"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "ingest_batch_id"
+          ],
+          "references": {
+            "table": "ingest_batch",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        },
+        {
+          "columns": [
+            "indicator_id"
+          ],
+          "references": {
+            "table": "indicator_definition",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_ingest_item_batch",
+          "columns": [
+            "ingest_batch_id"
+          ],
+          "method": "btree"
+        }
+      ],
+      "rls": {
+        "enabled": true,
+        "policies": [
+          {
+            "name": "ingest_item_tenant",
+            "command": "ALL",
+            "using": "ingest_batch_id in (select id from ingest_batch where organization_id = current_setting('app.organization_id')::uuid)",
+            "check": "true"
+          }
+        ]
+      }
+    },
+    {
+      "name": "agent",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "organization_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "agent_status",
+          "nullable": false,
+          "default": "'ACTIVE'"
+        },
+        {
+          "name": "secret_hash",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "last_seen_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "organization_id"
+          ],
+          "references": {
+            "table": "organization",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        }
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_agent_org_name",
+          "columns": [
+            "organization_id",
+            "name"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_agent_org_status",
+          "columns": [
+            "organization_id",
+            "status"
+          ],
+          "method": "btree"
+        },
+        {
+          "name": "ix_agent_last_seen",
+          "columns": [
+            "last_seen_at"
+          ],
+          "method": "btree"
+        }
+      ],
+      "rls": {
+        "enabled": true,
+        "policies": [
+          {
+            "name": "agent_tenant",
+            "command": "ALL",
+            "using": "organization_id = current_setting('app.organization_id')::uuid",
+            "check": "organization_id = current_setting('app.organization_id')::uuid"
+          }
+        ]
+      }
+    },
+    {
+      "name": "alert_event",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "organization_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "indicator_id",
+          "type": "uuid",
+          "nullable": true
+        },
+        {
+          "name": "severity",
+          "type": "alert_severity",
+          "nullable": false
+        },
+        {
+          "name": "kind",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "details",
+          "type": "jsonb",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "organization_id"
+          ],
+          "references": {
+            "table": "organization",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        },
+        {
+          "columns": [
+            "indicator_id"
+          ],
+          "references": {
+            "table": "indicator_definition",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "set null"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_alert_org_created",
+          "columns": [
+            "organization_id",
+            "created_at"
+          ],
+          "method": "btree"
+        },
+        {
+          "name": "ix_alert_severity",
+          "columns": [
+            "severity"
+          ],
+          "method": "btree"
+        }
+      ],
+      "rls": {
+        "enabled": true,
+        "policies": [
+          {
+            "name": "alert_tenant",
+            "command": "ALL",
+            "using": "organization_id = current_setting('app.organization_id')::uuid",
+            "check": "organization_id = current_setting('app.organization_id')::uuid"
+          }
+        ]
+      }
+    },
+    {
+      "name": "checkin",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "organization_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "objective_id",
+          "type": "uuid",
+          "nullable": true
+        },
+        {
+          "name": "indicator_id",
+          "type": "uuid",
+          "nullable": true
+        },
+        {
+          "name": "period_start_utc",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "granularity",
+          "type": "period_granularity",
+          "nullable": false
+        },
+        {
+          "name": "summary",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "created_by",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "organization_id"
+          ],
+          "references": {
+            "table": "organization",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        },
+        {
+          "columns": [
+            "objective_id"
+          ],
+          "references": {
+            "table": "objective",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "set null"
+        },
+        {
+          "columns": [
+            "indicator_id"
+          ],
+          "references": {
+            "table": "indicator_definition",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "set null"
+        },
+        {
+          "columns": [
+            "created_by"
+          ],
+          "references": {
+            "table": "user_account",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "restrict"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_checkin_org_period",
+          "columns": [
+            "organization_id",
+            "period_start_utc"
+          ],
+          "method": "btree"
+        },
+        {
+          "name": "ix_checkin_created_by",
+          "columns": [
+            "created_by"
+          ],
+          "method": "btree"
+        }
+      ],
+      "rls": {
+        "enabled": true,
+        "policies": [
+          {
+            "name": "checkin_tenant",
+            "command": "ALL",
+            "using": "organization_id = current_setting('app.organization_id')::uuid",
+            "check": "organization_id = current_setting('app.organization_id')::uuid"
+          }
+        ]
+      }
+    },
+    {
+      "name": "audit_log",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "organization_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "actor",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "action",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "entity",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "entity_id",
+          "type": "uuid",
+          "nullable": true
+        },
+        {
+          "name": "diff",
+          "type": "jsonb",
+          "nullable": true
+        },
+        {
+          "name": "request_id",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "trace_id",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "organization_id"
+          ],
+          "references": {
+            "table": "organization",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_audit_org_at",
+          "columns": [
+            "organization_id",
+            "at"
+          ],
+          "method": "btree"
+        },
+        {
+          "name": "ix_audit_entity",
+          "columns": [
+            "entity",
+            "entity_id"
+          ],
+          "method": "btree"
+        }
+      ],
+      "rls": {
+        "enabled": true,
+        "policies": [
+          {
+            "name": "audit_read_tenant",
+            "command": "SELECT",
+            "using": "organization_id = current_setting('app.organization_id')::uuid"
+          }
+        ]
+      }
+    },
+    {
+      "name": "dq_violation",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "organization_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "indicator_id",
+          "type": "uuid",
+          "nullable": true
+        },
+        {
+          "name": "period_start_utc",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "segment_hash",
+          "type": "bytea",
+          "nullable": true
+        },
+        {
+          "name": "rule",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "severity",
+          "type": "alert_severity",
+          "nullable": false
+        },
+        {
+          "name": "details",
+          "type": "jsonb",
+          "nullable": true
+        },
+        {
+          "name": "detected_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "organization_id"
+          ],
+          "references": {
+            "table": "organization",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        },
+        {
+          "columns": [
+            "indicator_id"
+          ],
+          "references": {
+            "table": "indicator_definition",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "set null"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_dq_org_indicator",
+          "columns": [
+            "organization_id",
+            "indicator_id",
+            "detected_at"
+          ],
+          "method": "btree"
+        },
+        {
+          "name": "ix_dq_rule_severity",
+          "columns": [
+            "rule",
+            "severity"
+          ],
+          "method": "btree"
+        }
+      ],
+      "rls": {
+        "enabled": true,
+        "policies": [
+          {
+            "name": "dq_tenant",
+            "command": "ALL",
+            "using": "organization_id = current_setting('app.organization_id')::uuid",
+            "check": "organization_id = current_setting('app.organization_id')::uuid"
+          }
+        ]
+      }
+    },
+    {
+      "name": "webhook_event",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "organization_id",
+          "type": "uuid",
+          "nullable": true
+        },
+        {
+          "name": "source",
+          "type": "webhook_source",
+          "nullable": false
+        },
+        {
+          "name": "external_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "payload",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false,
+          "default": "'RECEIVED'"
+        },
+        {
+          "name": "received_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "processed_at",
+          "type": "timestamptz",
+          "nullable": true
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_webhook_source_external",
+          "columns": [
+            "source",
+            "external_id"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "organization_id"
+          ],
+          "references": {
+            "table": "organization",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "set null"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_webhook_status",
+          "columns": [
+            "status"
+          ],
+          "method": "btree"
+        },
+        {
+          "name": "ix_webhook_received_at",
+          "columns": [
+            "received_at"
+          ],
+          "method": "btree"
+        }
+      ],
+      "rls": {
+        "enabled": false
+      }
+    },
+    {
+      "name": "stripe_customer",
+      "columns": [
+        {
+          "name": "organization_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "customer_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "subscription_id",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "plan",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "current_period_end",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "organization_id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "organization_id"
+          ],
+          "references": {
+            "table": "organization",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        }
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_stripe_customer",
+          "columns": [
+            "customer_id"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_stripe_status",
+          "columns": [
+            "status"
+          ],
+          "method": "btree"
+        }
+      ],
+      "rls": {
+        "enabled": true,
+        "policies": [
+          {
+            "name": "stripe_tenant",
+            "command": "ALL",
+            "using": "organization_id = current_setting('app.organization_id')::uuid",
+            "check": "organization_id = current_setting('app.organization_id')::uuid"
+          }
+        ]
+      }
+    },
+    {
+      "name": "onboarding_session",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "organization_id",
+          "type": "uuid",
+          "nullable": true
+        },
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "state",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "step",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false,
+          "default": "'ACTIVE'"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "organization_id"
+          ],
+          "references": {
+            "table": "organization",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "set null"
+        },
+        {
+          "columns": [
+            "user_id"
+          ],
+          "references": {
+            "table": "user_account",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_onboarding_user",
+          "columns": [
+            "user_id"
+          ],
+          "method": "btree"
+        },
+        {
+          "name": "ix_onboarding_status",
+          "columns": [
+            "status"
+          ],
+          "method": "btree"
+        }
+      ],
+      "rls": {
+        "enabled": false
+      }
+    },
+    {
+      "name": "refresh_token",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "token_hash",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "expires_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "revoked_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "user_id"
+          ],
+          "references": {
+            "table": "user_account",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        }
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_refresh_token_hash",
+          "columns": [
+            "token_hash"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_refresh_user",
+          "columns": [
+            "user_id"
+          ],
+          "method": "btree"
+        },
+        {
+          "name": "ix_refresh_expires",
+          "columns": [
+            "expires_at"
+          ],
+          "method": "btree"
+        }
+      ],
+      "rls": {
+        "enabled": false
+      }
+    },
+    {
+      "name": "password_reset_token",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "token_hash",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "expires_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "consumed_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "user_id"
+          ],
+          "references": {
+            "table": "user_account",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        }
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_password_token_hash",
+          "columns": [
+            "token_hash"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_password_expires",
+          "columns": [
+            "expires_at"
+          ],
+          "method": "btree"
+        }
+      ],
+      "rls": {
+        "enabled": false
+      }
+    },
+    {
+      "name": "email_verification_token",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "token_hash",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "expires_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "consumed_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "user_id"
+          ],
+          "references": {
+            "table": "user_account",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        }
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_email_verification_hash",
+          "columns": [
+            "token_hash"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_email_verification_expires",
+          "columns": [
+            "expires_at"
+          ],
+          "method": "btree"
+        }
+      ],
+      "rls": {
+        "enabled": false
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "from_table": "organization_member",
+      "from_columns": [
+        "organization_id"
+      ],
+      "to_table": "organization",
+      "to_columns": [
+        "id"
+      ],
+      "on_delete": "cascade"
+    },
+    {
+      "from_table": "organization_member",
+      "from_columns": [
+        "user_id"
+      ],
+      "to_table": "user_account",
+      "to_columns": [
+        "id"
+      ],
+      "on_delete": "cascade"
+    },
+    {
+      "from_table": "objective",
+      "from_columns": [
+        "organization_id"
+      ],
+      "to_table": "organization",
+      "to_columns": [
+        "id"
+      ],
+      "on_delete": "cascade"
+    },
+    {
+      "from_table": "indicator_definition",
+      "from_columns": [
+        "organization_id"
+      ],
+      "to_table": "organization",
+      "to_columns": [
+        "id"
+      ],
+      "on_delete": "cascade"
+    },
+    {
+      "from_table": "indicator_definition",
+      "from_columns": [
+        "objective_id"
+      ],
+      "to_table": "objective",
+      "to_columns": [
+        "id"
+      ],
+      "on_delete": "set null"
+    },
+    {
+      "from_table": "indicator_target",
+      "from_columns": [
+        "indicator_id"
+      ],
+      "to_table": "indicator_definition",
+      "to_columns": [
+        "id"
+      ],
+      "on_delete": "cascade"
+    },
+    {
+      "from_table": "indicator_value",
+      "from_columns": [
+        "indicator_id"
+      ],
+      "to_table": "indicator_definition",
+      "to_columns": [
+        "id"
+      ],
+      "on_delete": "cascade"
+    },
+    {
+      "from_table": "ingest_batch",
+      "from_columns": [
+        "organization_id"
+      ],
+      "to_table": "organization",
+      "to_columns": [
+        "id"
+      ],
+      "on_delete": "cascade"
+    },
+    {
+      "from_table": "ingest_batch",
+      "from_columns": [
+        "agent_id"
+      ],
+      "to_table": "agent",
+      "to_columns": [
+        "id"
+      ],
+      "on_delete": "set null"
+    },
+    {
+      "from_table": "ingest_item",
+      "from_columns": [
+        "ingest_batch_id"
+      ],
+      "to_table": "ingest_batch",
+      "to_columns": [
+        "id"
+      ],
+      "on_delete": "cascade"
+    },
+    {
+      "from_table": "agent",
+      "from_columns": [
+        "organization_id"
+      ],
+      "to_table": "organization",
+      "to_columns": [
+        "id"
+      ],
+      "on_delete": "cascade"
+    },
+    {
+      "from_table": "alert_event",
+      "from_columns": [
+        "organization_id"
+      ],
+      "to_table": "organization",
+      "to_columns": [
+        "id"
+      ],
+      "on_delete": "cascade"
+    },
+    {
+      "from_table": "checkin",
+      "from_columns": [
+        "organization_id"
+      ],
+      "to_table": "organization",
+      "to_columns": [
+        "id"
+      ],
+      "on_delete": "cascade"
+    },
+    {
+      "from_table": "audit_log",
+      "from_columns": [
+        "organization_id"
+      ],
+      "to_table": "organization",
+      "to_columns": [
+        "id"
+      ],
+      "on_delete": "cascade"
+    },
+    {
+      "from_table": "dq_violation",
+      "from_columns": [
+        "organization_id"
+      ],
+      "to_table": "organization",
+      "to_columns": [
+        "id"
+      ],
+      "on_delete": "cascade"
+    },
+    {
+      "from_table": "stripe_customer",
+      "from_columns": [
+        "organization_id"
+      ],
+      "to_table": "organization",
+      "to_columns": [
+        "id"
+      ],
+      "on_delete": "cascade"
+    }
+  ],
+  "views": [
+    {
+      "name": "indicator_value_latest",
+      "columns": [
+        "organization_id",
+        "indicator_id",
+        "period_start_utc",
+        "granularity",
+        "segment_key",
+        "segment_hash",
+        "value",
+        "version"
+      ],
+      "definition_note": "Select distinct on (org, indicator, period_start_utc, segment_hash) ordered by version desc.",
+      "rls_inherit": true
+    },
+    {
+      "name": "indicator_target_join",
+      "columns": [
+        "organization_id",
+        "indicator_id",
+        "period_start_utc",
+        "value",
+        "target_value",
+        "status"
+      ],
+      "definition_note": "Join latest values with targets and compute status by direction/tolerance.",
+      "rls_inherit": true
+    },
+    {
+      "name": "indicator_staleness",
+      "columns": [
+        "organization_id",
+        "indicator_id",
+        "days_since_update"
+      ],
+      "definition_note": "Compute days since last version per indicator to support staleness alerts.",
+      "rls_inherit": true
+    }
+  ],
+  "partitioning": [
+    {
+      "table": "indicator_value",
+      "type": "range",
+      "expression": "date_trunc('month', period_start_utc)",
+      "partitions_ahead_months": 12
+    }
+  ],
+  "rls_overview": {
+    "guc": "app.organization_id",
+    "policy_template": "organization_id = current_setting('app.organization_id')::uuid",
+    "notes": [
+      "Define GUC per transaction in API and workers.",
+      "All multi-tenant tables have USING and WITH CHECK policies.",
+      "Avoid SECURITY DEFINER functions that bypass RLS unless strictly validated."
+    ]
+  }
+}

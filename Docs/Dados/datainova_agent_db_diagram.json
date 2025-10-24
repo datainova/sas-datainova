@@ -1,0 +1,1196 @@
+{
+  "version": "1.0.0",
+  "generated_at_utc": "2025-10-22T19:52:46.719043Z",
+  "database": {
+    "vendor": "PostgreSQL",
+    "version": "16"
+  },
+  "notes": [
+    "Single-tenant (one installation per customer/site). No RLS; isolation is at host/environment level.",
+    "Stores only aggregated values by period/segment. No PII or raw rows leave the premises.",
+    "Strong idempotency for publish via (batch_id, checksum)."
+  ],
+  "types": {
+    "enums": {
+      "period_granularity": [
+        "DAY",
+        "WEEK",
+        "MONTH",
+        "QUARTER",
+        "YEAR"
+      ],
+      "run_state": [
+        "SCHEDULED",
+        "RUNNING",
+        "SUCCEEDED",
+        "FAILED",
+        "CANCELED"
+      ],
+      "publish_state": [
+        "PENDING",
+        "OK",
+        "DUPLICATE",
+        "CONFLICT",
+        "ERROR"
+      ],
+      "connector_type": [
+        "POSTGRES",
+        "SQLSERVER"
+      ],
+      "severity": [
+        "INFO",
+        "WARN",
+        "CRITICAL"
+      ]
+    }
+  },
+  "tables": [
+    {
+      "name": "agent_config",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "tenant_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "agent_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "saas_base_url",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "org_tz",
+          "type": "text",
+          "nullable": false,
+          "comment": "IANA timezone name"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_agent_config_agent",
+          "columns": [
+            "agent_id"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_agent_config_updated",
+          "columns": [
+            "updated_at"
+          ],
+          "method": "btree"
+        }
+      ]
+    },
+    {
+      "name": "connector",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "type",
+          "type": "connector_type",
+          "nullable": false
+        },
+        {
+          "name": "dsn_ref",
+          "type": "text",
+          "nullable": false,
+          "comment": "Reference to secret file or vault path"
+        },
+        {
+          "name": "allowlist",
+          "type": "jsonb",
+          "nullable": false,
+          "default": "[]"
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false,
+          "default": "'UNKNOWN'"
+        },
+        {
+          "name": "last_ok_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "indexes": [
+        {
+          "name": "ix_connector_name",
+          "columns": [
+            "name"
+          ],
+          "method": "btree"
+        },
+        {
+          "name": "ix_connector_status",
+          "columns": [
+            "status"
+          ],
+          "method": "btree"
+        }
+      ]
+    },
+    {
+      "name": "connector_health",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "connector_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "rtt_ms",
+          "type": "int",
+          "nullable": true
+        },
+        {
+          "name": "checked_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "details",
+          "type": "jsonb",
+          "nullable": true
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "connector_id"
+          ],
+          "references": {
+            "table": "connector",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_connector_health_connector",
+          "columns": [
+            "connector_id",
+            "checked_at"
+          ],
+          "method": "btree"
+        }
+      ]
+    },
+    {
+      "name": "querycode",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "indicator_id",
+          "type": "uuid",
+          "nullable": false,
+          "comment": "SaaS indicator id"
+        },
+        {
+          "name": "version",
+          "type": "int",
+          "nullable": false,
+          "default": "1"
+        },
+        {
+          "name": "checksum",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "sql",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "mapping",
+          "type": "jsonb",
+          "nullable": false,
+          "comment": "segment mapping and column bindings"
+        },
+        {
+          "name": "connector_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "vcs_ref",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "connector_id"
+          ],
+          "references": {
+            "table": "connector",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "restrict"
+        }
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_querycode_indicator_version",
+          "columns": [
+            "indicator_id",
+            "version"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_querycode_indicator_checksum",
+          "columns": [
+            "indicator_id",
+            "checksum"
+          ],
+          "method": "btree"
+        }
+      ]
+    },
+    {
+      "name": "sync_indicator",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "code",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "direction",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "granularity_default",
+          "type": "period_granularity",
+          "nullable": false
+        },
+        {
+          "name": "tolerance",
+          "type": "numeric(12,6)",
+          "nullable": true
+        },
+        {
+          "name": "etag",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "indexes": [
+        {
+          "name": "ix_sync_indicator_code",
+          "columns": [
+            "code"
+          ],
+          "method": "btree"
+        },
+        {
+          "name": "ix_sync_indicator_updated",
+          "columns": [
+            "updated_at"
+          ],
+          "method": "btree"
+        }
+      ]
+    },
+    {
+      "name": "sync_segment_rule",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "indicator_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "allowed_keys",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "allowed_values",
+          "type": "jsonb",
+          "nullable": true
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "indicator_id"
+          ],
+          "references": {
+            "table": "sync_indicator",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_segment_rule_indicator",
+          "columns": [
+            "indicator_id"
+          ],
+          "method": "btree"
+        }
+      ]
+    },
+    {
+      "name": "sync_target",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "indicator_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "period_start_utc",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "granularity",
+          "type": "period_granularity",
+          "nullable": false
+        },
+        {
+          "name": "segment_key",
+          "type": "jsonb",
+          "nullable": true
+        },
+        {
+          "name": "segment_hash",
+          "type": "bytea",
+          "nullable": true
+        },
+        {
+          "name": "target_value",
+          "type": "numeric(20,6)",
+          "nullable": false
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "indicator_id"
+          ],
+          "references": {
+            "table": "sync_indicator",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        }
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_sync_target_business",
+          "columns": [
+            "indicator_id",
+            "period_start_utc",
+            "segment_hash"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_sync_target_indicator_period",
+          "columns": [
+            "indicator_id",
+            "period_start_utc"
+          ],
+          "method": "btree"
+        },
+        {
+          "name": "ix_sync_target_segment_hash",
+          "columns": [
+            "segment_hash"
+          ],
+          "method": "btree"
+        },
+        {
+          "name": "ix_sync_target_segment_key",
+          "columns": [
+            "segment_key"
+          ],
+          "method": "gin",
+          "using": "jsonb_path_ops"
+        }
+      ]
+    },
+    {
+      "name": "run",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "indicator_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "period_start_utc",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "granularity",
+          "type": "period_granularity",
+          "nullable": false
+        },
+        {
+          "name": "state",
+          "type": "run_state",
+          "nullable": false,
+          "default": "'SCHEDULED'"
+        },
+        {
+          "name": "attempt",
+          "type": "int",
+          "nullable": false,
+          "default": "0"
+        },
+        {
+          "name": "max_attempts",
+          "type": "int",
+          "nullable": false,
+          "default": "6"
+        },
+        {
+          "name": "started_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "finished_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "error",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "stats",
+          "type": "jsonb",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "indexes": [
+        {
+          "name": "ix_run_indicator_period",
+          "columns": [
+            "indicator_id",
+            "period_start_utc"
+          ],
+          "method": "btree"
+        },
+        {
+          "name": "ix_run_state",
+          "columns": [
+            "state"
+          ],
+          "method": "btree"
+        }
+      ],
+      "partitioning": {
+        "type": "range",
+        "expression": "date_trunc('month', period_start_utc)",
+        "interval": "1 month",
+        "optional": true
+      }
+    },
+    {
+      "name": "run_result",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "run_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "period_start_utc",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "granularity",
+          "type": "period_granularity",
+          "nullable": false
+        },
+        {
+          "name": "segment_key",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "segment_hash",
+          "type": "bytea",
+          "nullable": false
+        },
+        {
+          "name": "value",
+          "type": "numeric(20,6)",
+          "nullable": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "run_id"
+          ],
+          "references": {
+            "table": "run",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_run_result_run",
+          "columns": [
+            "run_id"
+          ],
+          "method": "btree"
+        },
+        {
+          "name": "ix_run_result_segment_hash",
+          "columns": [
+            "segment_hash"
+          ],
+          "method": "btree"
+        },
+        {
+          "name": "ix_run_result_segment_key",
+          "columns": [
+            "segment_key"
+          ],
+          "method": "gin",
+          "using": "jsonb_path_ops"
+        }
+      ],
+      "partitioning": {
+        "type": "range",
+        "expression": "date_trunc('month', period_start_utc)",
+        "interval": "1 month",
+        "optional": true
+      }
+    },
+    {
+      "name": "outbox_batch",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "batch_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "checksum",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "state",
+          "type": "publish_state",
+          "nullable": false,
+          "default": "'PENDING'"
+        },
+        {
+          "name": "attempt",
+          "type": "int",
+          "nullable": false,
+          "default": "0"
+        },
+        {
+          "name": "last_http_status",
+          "type": "int",
+          "nullable": true
+        },
+        {
+          "name": "saas_request_id",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "error",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "published_at",
+          "type": "timestamptz",
+          "nullable": true
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        {
+          "name": "uq_outbox_batch_business",
+          "columns": [
+            "batch_id",
+            "checksum"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_outbox_batch_state",
+          "columns": [
+            "state"
+          ],
+          "method": "btree"
+        },
+        {
+          "name": "ix_outbox_batch_created",
+          "columns": [
+            "created_at"
+          ],
+          "method": "btree"
+        }
+      ],
+      "partitioning": {
+        "type": "range",
+        "expression": "date_trunc('month', created_at)",
+        "interval": "1 month",
+        "optional": true
+      }
+    },
+    {
+      "name": "outbox_item",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "outbox_batch_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "indicator_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "period_start_utc",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "granularity",
+          "type": "period_granularity",
+          "nullable": false
+        },
+        {
+          "name": "segment_key",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "segment_hash",
+          "type": "bytea",
+          "nullable": false
+        },
+        {
+          "name": "value",
+          "type": "numeric(20,6)",
+          "nullable": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "outbox_batch_id"
+          ],
+          "references": {
+            "table": "outbox_batch",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_outbox_item_batch",
+          "columns": [
+            "outbox_batch_id"
+          ],
+          "method": "btree"
+        },
+        {
+          "name": "ix_outbox_item_indicator_period",
+          "columns": [
+            "indicator_id",
+            "period_start_utc"
+          ],
+          "method": "btree"
+        }
+      ]
+    },
+    {
+      "name": "validation_issue",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "run_id",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "rule",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "severity",
+          "type": "severity",
+          "nullable": false
+        },
+        {
+          "name": "details",
+          "type": "jsonb",
+          "nullable": true
+        },
+        {
+          "name": "detected_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "run_id"
+          ],
+          "references": {
+            "table": "run",
+            "columns": [
+              "id"
+            ]
+          },
+          "on_delete": "cascade"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_validation_run",
+          "columns": [
+            "run_id",
+            "detected_at"
+          ],
+          "method": "btree"
+        },
+        {
+          "name": "ix_validation_rule",
+          "columns": [
+            "rule"
+          ],
+          "method": "btree"
+        }
+      ]
+    },
+    {
+      "name": "audit_local",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "actor",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "action",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "entity",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "entity_id",
+          "type": "uuid",
+          "nullable": true
+        },
+        {
+          "name": "diff",
+          "type": "jsonb",
+          "nullable": true
+        },
+        {
+          "name": "request_id",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "indexes": [
+        {
+          "name": "ix_audit_entity",
+          "columns": [
+            "entity",
+            "entity_id"
+          ],
+          "method": "btree"
+        },
+        {
+          "name": "ix_audit_at",
+          "columns": [
+            "at"
+          ],
+          "method": "btree"
+        }
+      ]
+    },
+    {
+      "name": "kv_store",
+      "columns": [
+        {
+          "name": "key",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "value",
+          "type": "jsonb",
+          "nullable": false,
+          "default": "'{}'::jsonb"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primary_key": [
+        "key"
+      ],
+      "indexes": [
+        {
+          "name": "ix_kv_updated",
+          "columns": [
+            "updated_at"
+          ],
+          "method": "btree"
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "from_table": "connector_health",
+      "from_columns": [
+        "connector_id"
+      ],
+      "to_table": "connector",
+      "to_columns": [
+        "id"
+      ],
+      "on_delete": "cascade"
+    },
+    {
+      "from_table": "querycode",
+      "from_columns": [
+        "connector_id"
+      ],
+      "to_table": "connector",
+      "to_columns": [
+        "id"
+      ],
+      "on_delete": "restrict"
+    },
+    {
+      "from_table": "sync_segment_rule",
+      "from_columns": [
+        "indicator_id"
+      ],
+      "to_table": "sync_indicator",
+      "to_columns": [
+        "id"
+      ],
+      "on_delete": "cascade"
+    },
+    {
+      "from_table": "sync_target",
+      "from_columns": [
+        "indicator_id"
+      ],
+      "to_table": "sync_indicator",
+      "to_columns": [
+        "id"
+      ],
+      "on_delete": "cascade"
+    },
+    {
+      "from_table": "run_result",
+      "from_columns": [
+        "run_id"
+      ],
+      "to_table": "run",
+      "to_columns": [
+        "id"
+      ],
+      "on_delete": "cascade"
+    },
+    {
+      "from_table": "outbox_item",
+      "from_columns": [
+        "outbox_batch_id"
+      ],
+      "to_table": "outbox_batch",
+      "to_columns": [
+        "id"
+      ],
+      "on_delete": "cascade"
+    },
+    {
+      "from_table": "validation_issue",
+      "from_columns": [
+        "run_id"
+      ],
+      "to_table": "run",
+      "to_columns": [
+        "id"
+      ],
+      "on_delete": "cascade"
+    }
+  ],
+  "partitioning": [
+    {
+      "table": "run",
+      "type": "range",
+      "expression": "date_trunc('month', period_start_utc)",
+      "partitions_ahead_months": 12,
+      "optional": true
+    },
+    {
+      "table": "run_result",
+      "type": "range",
+      "expression": "date_trunc('month', period_start_utc)",
+      "partitions_ahead_months": 12,
+      "optional": true
+    },
+    {
+      "table": "outbox_batch",
+      "type": "range",
+      "expression": "date_trunc('month', created_at)",
+      "partitions_ahead_months": 12,
+      "optional": true
+    }
+  ]
+}

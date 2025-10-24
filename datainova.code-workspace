@@ -1,0 +1,122 @@
+{
+  "folders": [
+    { "path": "apps/saas-api" },
+    { "path": "apps/saas-web" },
+    { "path": "apps/agent-api" },
+    { "path": "apps/agent-ui" },
+    { "path": "packages/contracts-openapi" },
+    { "path": "packages/contracts-mcp" },
+    { "path": "packages/ui-kit" },
+    { "path": "packages/eslint-config" },
+    { "path": "packages/tsconfig" },
+    { "path": "infra/compose" }
+  ],
+  "settings": {
+    "typescript.tsdk": "node_modules/typescript/lib",
+    "eslint.workingDirectories": [{ "mode": "auto" }],
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": "explicit",
+      "source.organizeImports": "explicit"
+    },
+    "files.exclude": {
+      "**/.turbo": true,
+      "**/dist": true,
+      "**/build": true,
+      "**/node_modules": false
+    },
+    "search.exclude": {
+      "**/.turbo": true,
+      "**/dist": true,
+      "**/build": true,
+      "**/node_modules": true
+    },
+    "terminal.integrated.defaultProfile.linux": "bash",
+    "prettier.requireConfig": true
+  },
+  "extensions": {
+    "recommendations": [
+      "dbaeumer.vscode-eslint",
+      "esbenp.prettier-vscode",
+      "ms-azuretools.vscode-docker",
+      "bradlc.vscode-tailwindcss",
+      "Prisma.prisma",
+      "rangav.vscode-thunder-client",
+      "github.vscode-github-actions",
+      "ms-vscode-remote.remote-containers",
+      "streetsidesoftware.code-spell-checker",
+      "orta.vscode-jest",
+      "bierner.markdown-mermaid"
+    ]
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "dev:saas",
+        "type": "shell",
+        "command": "pnpm -w dev:saas",
+        "problemMatcher": []
+      },
+      {
+        "label": "dev:agent",
+        "type": "shell",
+        "command": "pnpm -w dev:agent",
+        "problemMatcher": []
+      },
+      {
+        "label": "dev",
+        "type": "shell",
+        "command": "pnpm -w dev",
+        "problemMatcher": []
+      }
+    ]
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Debug SaaS API",
+        "request": "launch",
+        "type": "node",
+        "cwd": "${workspaceFolder:apps/saas-api}",
+        "runtimeExecutable": "pnpm",
+        "runtimeArgs": ["run", "dev"],
+        "console": "integratedTerminal"
+      },
+      {
+        "name": "Debug SaaS Web",
+        "request": "launch",
+        "type": "pwa-chrome",
+        "url": "http://localhost:5173",
+        "webRoot": "${workspaceFolder:apps/saas-web}"
+      },
+      {
+        "name": "Debug Agent API",
+        "request": "launch",
+        "type": "node",
+        "cwd": "${workspaceFolder:apps/agent-api}",
+        "runtimeExecutable": "pnpm",
+        "runtimeArgs": ["run", "dev"],
+        "console": "integratedTerminal"
+      },
+      {
+        "name": "Debug Agent UI",
+        "request": "launch",
+        "type": "pwa-chrome",
+        "url": "http://localhost:5174",
+        "webRoot": "${workspaceFolder:apps/agent-ui}"
+      }
+    ],
+    "compounds": [
+      {
+        "name": "Debug SaaS",
+        "configurations": ["Debug SaaS API", "Debug SaaS Web"]
+      },
+      {
+        "name": "Debug Agent",
+        "configurations": ["Debug Agent API", "Debug Agent UI"]
+      }
+    ]
+  }
+}

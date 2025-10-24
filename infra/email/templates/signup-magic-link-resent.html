@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Novo link mágico — DataInova Connect</title>
+    <style>
+      body {
+        font-family: "Exo 2", Arial, sans-serif;
+        background-color: #f8f7f6;
+        color: #2d2926;
+        margin: 0;
+        padding: 32px 16px;
+      }
+      .card {
+        max-width: 600px;
+        margin: 0 auto;
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 32px;
+        box-shadow: 0 24px 64px rgba(45, 41, 38, 0.12);
+      }
+      .cta {
+        display: inline-block;
+        margin-top: 24px;
+        padding: 14px 28px;
+        border-radius: 999px;
+        background: #2d2926;
+        color: #ffffff !important;
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .meta {
+        margin-top: 24px;
+        font-size: 12px;
+        color: rgba(45, 41, 38, 0.6);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <p style="text-transform: uppercase; letter-spacing: 0.35em; font-size: 12px;">
+        DataInova Connect
+      </p>
+      <h1 style="font-family: 'Jaapokki', 'Exo 2', sans-serif; font-size: 28px;">
+        Aqui está o novo link mágico solicitado
+      </h1>
+      <p style="font-size: 15px; line-height: 1.6;">
+        Reenviamos o link de cadastro para <strong>{{user_email}}</strong>. Clique em
+        “Concluir cadastro” e finalize a configuração da organização.
+      </p>
+      <a class="cta" href="{{magic_link}}" target="_blank" rel="noopener noreferrer">
+        Concluir cadastro
+      </a>
+      <p class="meta">
+        Este link substitui versões anteriores e expira em {{expires_at}}.
+      </p>
+      <p class="meta">
+        Se não reconhece este pedido, ignore ou encaminhe para {{security_contact}}.
+      </p>
+    </div>
+  </body>
+</html>

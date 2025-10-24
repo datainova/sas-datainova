@@ -1,0 +1,607 @@
+
+Especificação de Endpoints — DataInova Connect (SaaS v1)
+Objetivo: descrever os endpoints REST (v1) do SaaS para implementação pelo backend, com contratos de requisição/resposta, validações, segurança, idempotência e telemetria. Abrange autenticação, onboarding, organização/membros, objetivos/indicadores/metas/valores, ingestão (Agente → SaaS), check-ins, alertas, agentes, webhooks e observabilidade.
+1) Convenções Gerais
+Base URL: /v1 (ex.: https://api.datainova.com/v1).
+Formato: application/json; charset=utf-8.
+Autenticação: Bearer (JWT/OIDC) em Authorization: Bearer &lt;token&gt; ou sessão (cookies httpOnly/SameSite estritos).
+Correlação: exigir/propagar x-request-id (UUID) e traceparent (W3C). Responder sempre com os dois.
+Erros: RFC 7807 (application/problem+json). Campos: type, title, status, detail, instance, code, correlation{request_
+id,trace
+_id} e (quando útil) context.
+Paginação: cursor-based. Query
+: ?limit
+=50&amp;cursor=&lt;opaque&gt;. Resposta inclui
+{ "
+page": { "next": "...", "size": 50 } }.
+Cache e freshness: updatedSince=ISO8601 em lists; ETag/If-None-Match nos GETs idempotentes.
+Multitenancy/RLS: o tenant é inferido do token; não aceitar organization_id no corpo. Toda transação executa com SET LOCAL
+app.organization
+_id.
+Enum de período: granularity ∈ {
+DAY,WEEK
+,MONTH,QUARTER,YEAR}. period_start sempre início do período no fuso da org, convertido a UTC.
+Segmentação: segment_key é JSON canônico (chaves ordenadas, valores determinísticos); segment_hash = sha256(serialize(segment_key)).
+Idempotência: ver seções específicas (ingestão e webhooks).
+2) TabelaResumo de Endpoints
+Grupo
+Método
+Caminho
+Descrição breve
+Auth
+POST
+/auth/login
+Email/senha → sessão/tokens
+Auth
+POST
+/auth/token
+Refresh token
+Auth
+POST
+/auth/logout
+Invalida sessão
+Auth
+POST
+/auth/signup
+Cria conta
+Auth
+GET
+/auth/signup/confirm
+Confirma email (token)
+Auth
+POST
+/auth/signup/complete
+Finaliza cadastro
+Auth
+POST
+/auth/password/forgot
+Inicia reset
+Auth
+GET
+/auth/password/validate
+Valida token de reset
+Auth
+POST
+/auth/password/reset
+Define nova senha
+OIDC
+GET
+/auth/oidc/google/init
+Inicia PKCE
+OIDC
+GET
+/auth/oidc/google/callback
+Callback OIDC
+Onboarding
+POST
+/onboarding/sessions
+Cria sessão
+Onboarding
+PATCH
+/onboarding/sessions/:id/step
+Autosave do passo
+Onboarding
+POST
+/onboarding/sessions/:id/complete
+Conclui
+Org
+GET
+/organization
+Detalhe da org corrente
+Org
+PATCH
+/organization
+Atualiza prefs (tz, moeda, locale)
+Members
+GET
+/members
+Lista membros
+Members
+PATCH
+/members/:id
+Atualiza papel
+Invites
+GET
+/invites
+Lista convites
+Invites
+POST
+/invites
+Cria convite
+Invites
+POST
+/invites/:id/resend
+Reenvia (opcional)
+Objectives
+GET
+/objectives
+Lista objetivos
+Objectives
+POST
+/objectives
+Cria objetivo
+Objectives
+GET
+/objectives/:id
+Detalhe
+Objectives
+PATCH
+/objectives/:id
+Atualiza
+Indicators
+GET
+/indicators
+Lista defs (updatedSince)
+Indicators
+POST
+/indicators
+Cria indicador
+Indicators
+GET
+/indicators/:id
+Detalhe
+Indicators
+PATCH
+/indicators/:id
+Atualiza
+Targets
+GET
+/indicators/:id/targets
+Lista metas
+Targets
+POST
+/indicators/:id/targets
+Upsert de metas
+Values
+GET
+/indicators/:id/values
+Série (latest/histórico)
+Ingest
+POST
+/ingest/indicator-values
+Recebe lote do Agente
+Manual
+POST
+/indicators/:id/values/manual
+Insere valor manual
+Alerts
+GET
+/alerts
+Lista alertas (staleness/desvio)
+Alerts
+POST
+/alerts/ack
+Acknowledge
+Checkins
+GET
+/checkins
+Lista por filtro
+Checkins
+POST
+/checkins
+Cria checkin
+Agents
+GET
+/agents
+Lista agentes
+Agents
+POST
+/agents/register
+Cria/entrega agent_secret
+Agents
+POST
+/agents/:id/rotate-secret
+Rotaciona segredo
+Agents
+POST
+/agents/:id/revoke
+Revoga agente
+Webhooks
+POST
+/webhooks/stripe
+Eventos do Stripe
+Webhooks
+POST
+/webhooks/hubspot
+Eventos do HubSpot
+Audit
+GET
+/audit
+Trilhas de auditoria
+MCP
+POST
+/mcp
+Execução MCP (JSON-RPC batch)
+MCP
+POST
+/mcp/stream
+Stream MCP (SSE)
+MCP
+GET
+/mcp/capabilities
+Catálogo/quotas MCP
+DQ
+GET
+/dq/violations
+Violações de qualidade
+MCP
+POST
+/mcp
+Transporte JSONRPC (paridade com REST)
+Health
+GET
+/health
+Health leve (sem DB)
+Health
+GET
+/ready
+Dependências/migrations ok
+Metrics
+GET
+/metrics
+Prometheus
+Todos os endpoints respeitam RLS ao nível de dados.
+3) Esquemas Comuns (JSON Schemas simplificados)
+3.1 Tipos
+UUID: string ^[0-9a-fA-F-]{36}$
+ISODate: string em ISO 8601 UTC
+Granularity: enum DAY|WEEK|MONTH|QUARTER|YEAR
+SegmentKey: objeto JSON com chaves/valores simples (ordenáveis)
+3.2 Envelope de página
+{
+  "data":
+[ /
+* items */ ],
+  "page": { "next": "opaque-cursor-or-null", "size": 50 }
+}
+3.3 Problem Details (erro)
+{
+  "type": "https://errors.datainova.com/E_CONFLICT",
+  "title": "Conflict",
+  "status": 409,
+  "detail": "Batch already processed",
+  "instance": "/v1/ingest/indicator-values",
+  "code": "E_CONFLICT",
+  "correlation": {"request_id": "r-123", "trace_id": "4f3c"},
+  "context": {"batch_id": "b-202510", "checksum": "c-4a1f"}
+}
+4) Endpoints (detalhes)
+4.1 Autenticação (Auth/OIDC)
+POST /auth/login
+Body: { "email": string, "password": string }
+200: { "access_token": string, "refresh_token": string, "expires_in": number, "user": {"id": UUID} }
+401/429 conforme ratelimit e credenciais.
+POST /auth/token → refresh; POST /auth/logout → invalida.POST /auth/signup → GET /auth/signup/confirm?token → POST /auth/signup/complete.Password reset: POST /auth/password/forgot → GET /auth/password/validate?token → POST /auth/password/reset.
+OIDC: GET /auth/oidc/google/init (redirect com PKCE) → GET /auth/oidc/google/callback.
+4.2 Onboarding
+POST /onboarding/sessions → cria sessão
+{ id
+ }.PATCH /onboarding/sessions/:id/step → { step, payload } (autosave).POST /onboarding/sessions/:id/complete → finaliza e materializa organization.
+4.3 Organização, Membros e Convites
+GET /organization → dados da org corrente; PATCH /organization para tz/moeda/locale.GET /members?role=&amp;limit=&amp;cursor= → lista; PATCH /members/:id
+{ role
+ }.GET /invites (paginado, updatedSince), POST /invites { email, role }.
+4.4 Objetivos
+GET /objectives?updatedSince=&amp;limit=&amp;cursor=.POST /objectives { name, description?, ownerId? }.GET/PATCH /objectives/:id.
+4.5 Indicadores (definições, metas e valores)
+GET /indicators?updatedSince=&amp;objectiveId=&amp;limit=&amp;cursor=.POST /indicators { code, name, direction, granularityDefault, tolerance?, unit?, segmentSchema? }.GET/PATCH /indicators/:id.
+Metas
+GET /indicators/:id/targets?range=YYYY-MM-DD..YYYY-MM-DD&amp;limit=&amp;cursor=
+POST /indicators/:id/targets (upsert em lote)
+{
+  "items": [
+    {
+      "period_start": "2025-10-01T00:00:00Z",
+      "granularity": "MONTH",
+      "segment_key": {"country":"BR"},
+      "target_value": 123.45,
+      "tolerance_override": 0.05
+    }
+  ]
+}
+201:
+{ created
+: n, updated: m }
+Valores (consulta)
+GET /indicators/:id/values?range=YYYY-MM-DD..YYYY-MM-DD&amp;segment=JSON&amp;latestOnly=true|false
+200:
+{
+  "data": [
+    {
+      "period_start": "2025-10-01T00:00:00Z",
+      "granularity": "MONTH",
+      "segment_key": {"country":"BR"},
+      "value": 100.50,
+      "version": 3,
+      "source": "agent"
+    }
+  ]
+}
+4.6 Ingestão (Agente → SaaS)
+POST /ingest/indicator-values
+Headers obrigatórios:X-Agent-Id: uuidX-Batch-Id: string (idempotência)X-Signature: sha256=&lt;hmac(body, agent_secret)&gt;
+Body:
+{
+  "items": [
+    {
+      "indicator_id": "uuid",
+      "period_start": "2025-10-01T00:00:00Z",
+      "granularity": "MONTH",
+      "segment_key": {"country":"BR"},
+      "value": 100.5
+    }
+  ]
+}
+202 { accepted: n, duplicate: d, conflict: c }
+409 (Problem+JSON) quando conflito de estado; 401 assinatura inválida; 429/5xx com retry-after.
+Regras: somente agregados; deduplicação por (organization_id, batch_id, checksum); merge com advisory locks por (
+indicator,period
+,segment_hash).
+4.7 Valores Manuais
+POST /indicators/:id/values/manual
+Body: igual a um item de ingestão;
+cria nova
+ versão (source=manual) com trilha em auditoria.
+201: item criado; 409 se inválido/fora de política.
+4.8 Alertas
+GET /alerts?severity=&amp;from=&amp;to=&amp;limit=&amp;cursor= → eventos (staleness, desvios).POST /alerts/ack { alert_id, comment? } → registra ack.
+4.9 Checkins
+GET /checkins?objectiveId=&amp;indicatorId=&amp;range=.POST /checkins { objectiveId?, indicatorId?, period_start, granularity, summary }.
+4.10 Agentes
+GET /agents?status= → lista.POST /agents/register { name } → responde { agent_id, agent_secret } (mostrar uma vez).POST /agents/:id/rotate-secret → rotação controlada.POST /agents/:id/revoke → revoga e bloqueia publicações.
+4.11 Webhooks
+POST /webhooks/stripe
+Headers: assinatura do Stripe; idempotência por event.id.
+200 em sucesso; 409 se duplicado.
+POST /webhooks/hubspot — idempotência por (source, external_id).
+4.12 Auditoria e DQ
+GET /audit?entity=&amp;actor=&amp;from=&amp;to=&amp;limit=&amp;cursor= → eventos (sem PII).GET /dq/violations?indicatorId=&amp;severity=&amp;from=&amp;to=&amp;limit=&amp;cursor=.
+4.13 Observabilidade e MCP
+GET /health (sem tocar DB).GET /ready (migrations, conexões, workers ok).GET /metrics (Prometheus).
+POST /mcp — transporte JSON-RPC 2.0 do MCP (tools/resources/prompts). Suporta batch; rate limit conforme plano (free=60 rpm, pro=120 rpm, enterprise=300 rpm).
+POST /mcp/stream — execução MCP via Server-Sent Events (somente planos pro/enterprise).
+GET /mcp/capabilities — catálogo dinâmico de tools/resources/prompts e limites habilitados para o tenant. Retorna plano corrente, transports habilitados ({ http, sse, websocket }) e quotas rpm.
+Notas: requere autenticação igual às rotas REST; roles e planos controlam acesso (ex.: agents.* apenas admin+enterprise, nai.* apenas editor+pro/enterprise).
+5) Validações &amp; Regras por Domínio
+Período: period_start deve alinhar ao início do período conforme granularity e TZ da org; rejeitar fora de alinhamento.
+Segmento: aceitar apenas chaves/valores previstos pela segment schema do indicador (quando definida); normalizar e computar segment_hash.
+Indicadores/Metas: direction ∈ {
+UP,DOWN
+,RANGE}; tolerance 0..1 (percentual); metas podem sobrescrever tolerância.
+Ingestão: cada lote gera ingest_batch + ingest_item{n}; bloquear reprocesso com mesmo (batch_id, checksum); CONFLICT quando o mesmo lote traz valor divergente do último merge para (indicador, período, segmento).
+RLS: todos os handlers devem definir
+app.organization
+_id no início da transação; recusar qualquer organization_id vindo do cliente.
+6) Telemetria (eventos sugeridos)
+auth_login_{success|failure}
+onboarding_step_{viewed|completed}
+indicator_{created|updated}
+ingest_{received|validated|merged}_{ok|duplicate|conflict|error}
+alerts_{created|acked}
+checkin_{created}
+7) Segurança &amp; Ratelimit
+Auth: Argon2id (senhas), OIDC (Google), Magic Link; cookies httpOnly/SameSite; CORS restrito.
+Headers sensíveis: nunca logar authorization, cookie ou x-signature do Agente; redigir por default.
+Ratelimit padrão:POST /auth/login 10/min por IP; POST /ingest/indicator-values 300/min por agente (ajustável por plano).
+TLS: obrigatório; rejeitar downgrade.
+8) Exemplos rápidos (cURL)
+Ingestão
+curl -X POST "$API/v1/ingest/indicator-values" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "X-Agent-Id: $AGENT_ID" \
+  -H "X-Batch-Id: b-2025-10-01" \
+  -H "X-Signature: sha256=$SIG" \
+  -d '{"items":[{"indicator_id":"'$IND'","period_start":"2025-10-01T00:00:00Z","granularity":"MONTH","segment_key":{"country":"BR"},"value":100.5}]}'
+Consulta de valores
+curl "$API/v1/indicators/$IND/values?range=2025-01-01..2025-10-01&amp;latestOnly=true&amp;segment={\"country\":\"BR\"}"
+9) Anexo — OpenAPI (esqueleto mínimo)
+openapi: 3.1.0
+info:
+  title: DataInova Connect — SaaS API
+  version: v1
+servers:
+  - url: https://api.datainova.com/v1
+paths:
+  /ingest/indicator-values:
+    post:
+      summary: Recebe lote de valores (Agente)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: header
+          name: X-Agent-Id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: header
+          name: X-Batch-Id
+          required: true
+          schema: { type: string }
+        - in: header
+          name: X-Signature
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/IndicatorValueIn'
+      responses:
+        '202': { description: Accepted }
+        '401': { description: Unauthorized }
+        '409': { description: Conflict }
+  /indicators/{id}/values:
+    get:
+      summary: Consulta série de valores
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: range
+          schema: { type: string, example: '2025-01-01..2025-10-01' }
+        - in: query
+          name: latestOnly
+          schema: { type: boolean, default: true }
+        - in: query
+          name: segment
+          schema: { type: string, description: 'JSON string' }
+      responses:
+        '200': { description: OK }
+  /mcp:
+    post:
+      summary: Executa chamadas MCP (JSON-RPC)
+      description: Executa tools/resources/prompts via JSON-RPC 2.0.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/JsonRpcRequest'
+                - type: array
+                  items: { $ref: '#/components/schemas/JsonRpcRequest' }
+      responses:
+        '200':
+          description: JSON-RPC response envelope (single ou batch)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/JsonRpcResponse'
+                  - type: array
+                    items: { $ref: '#/components/schemas/JsonRpcResponse' }
+  /mcp/stream:
+    post:
+      summary: Stream MCP via SSE
+      description: Executa chamadas MCP retornando Server-Sent Events (`result`, `error`, `complete`). Disponível a partir do plano pro.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/JsonRpcRequest'
+                - type: array
+                  items: { $ref: '#/components/schemas/JsonRpcRequest' }
+      responses:
+        '200':
+          description: Fluxo text/event-stream com envelopes JSON-RPC serializados
+          content:
+            text/event-stream:
+              schema: { type: string }
+  /mcp/capabilities:
+    get:
+      summary: Catálogo MCP do tenant
+      responses:
+        '200':
+          description: Capacidades MCP habilitadas (plano, transports, quotas)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/McpCapabilities' }
+components:
+  schemas:
+    SegmentKey:
+      type: object
+      additionalProperties: true
+    IndicatorValueIn:
+      type: object
+      required: [indicator_id, period_start, granularity, segment_key, value]
+      properties:
+        indicator_id: { type: string, format: uuid }
+        period_start: { type: string, format: date-time }
+        granularity: { type: string, enum: [DAY,WEEK,MONTH,QUARTER,YEAR] }
+        segment_key: { $ref: '#/components/schemas/SegmentKey' }
+        value:
+{ type
+: number }
+    JsonRpcRequest:
+      type: object
+      required: [jsonrpc, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id:
+          oneOf:
+            - { type: string }
+            - { type: integer }
+            - { type: 'null' }
+        method: { type: string }
+        params: {}
+      additionalProperties: false
+    JsonRpcResponse:
+      type: object
+      required: [jsonrpc]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id:
+          oneOf:
+            - { type: string }
+            - { type: integer }
+            - { type: 'null' }
+        result: {}
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: integer }
+            message: { type: string }
+            data: {}
+          additionalProperties: true
+      additionalProperties: false
+    McpCapabilities:
+      type: object
+      required: [version, plan, transports, rateLimit]
+      properties:
+        version: { type: string }
+        plan: { type: string, enum: ['free', 'pro', 'enterprise'] }
+        transports:
+          type: object
+          properties:
+            http: { type: boolean }
+            sse: { type: boolean }
+            websocket: { type: boolean }
+          additionalProperties: false
+        rateLimit:
+          type: object
+          properties:
+            rpm: { type: integer }
+          additionalProperties: false
+        tools:
+          type: array
+          items:
+            type: object
+            required: [name, title]
+            properties:
+              name: { type: string }
+              title: { type: string }
+            additionalProperties: false
+        resources:
+          type: array
+          items:
+            type: object
+            required: [uri, title]
+            properties:
+              uri: { type: string }
+              title: { type: string }
+            additionalProperties: false
+        prompts:
+          type: array
+          items:
+            type: object
+            required: [uri, title]
+            properties:
+              uri: { type: string }
+              title: { type: string }
+            additionalProperties: false
+10) Critérios de Aceite (gerais)
+RLS aplicado a todas as rotas de dados; nenhuma leitura crosstenant em testes.
+Ingestão idempotente; reentregas não criam duplicatas; conflitos sinalizados via 409.
+Views e consultas entregam latest quando solicitado; filtros por período/segmento operam em índices.
+Logs estruturados com request_id, tenant_id, trace_id; sem segredos.
+SLO de leitura (p99 ≤ 400ms em chamadas de consulta comum com filtros).

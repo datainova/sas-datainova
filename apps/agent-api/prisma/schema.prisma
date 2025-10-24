@@ -1,0 +1,288 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  extensions = [
+    citext(map: "citext"),
+    pgcrypto(map: "pgcrypto")
+  ]
+}
+
+enum PeriodGranularity {
+  DAY      @map("DAY")
+  WEEK     @map("WEEK")
+  MONTH    @map("MONTH")
+  QUARTER  @map("QUARTER")
+  YEAR     @map("YEAR")
+
+  @@map("period_granularity")
+}
+
+enum RunState {
+  SCHEDULED @map("SCHEDULED")
+  RUNNING   @map("RUNNING")
+  SUCCEEDED @map("SUCCEEDED")
+  FAILED    @map("FAILED")
+  CANCELED  @map("CANCELED")
+
+  @@map("run_state")
+}
+
+enum PublishState {
+  PENDING   @map("PENDING")
+  OK        @map("OK")
+  DUPLICATE @map("DUPLICATE")
+  CONFLICT  @map("CONFLICT")
+  ERROR     @map("ERROR")
+
+  @@map("publish_state")
+}
+
+enum ConnectorType {
+  POSTGRES  @map("POSTGRES")
+  SQLSERVER @map("SQLSERVER")
+
+  @@map("connector_type")
+}
+
+enum Severity {
+  INFO     @map("INFO")
+  WARN     @map("WARN")
+  CRITICAL @map("CRITICAL")
+
+  @@map("severity")
+}
+
+model AgentConfig {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @db.Uuid @map("tenant_id")
+  agentId      String   @unique(map: "uq_agent_config_agent") @db.Uuid @map("agent_id")
+  saasBaseUrl  String   @db.Text @map("saas_base_url")
+  orgTz        String   @db.Text @map("org_tz")
+  createdAt    DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6) @map("updated_at")
+
+  connectors Connector[]
+
+  @@map("agent_config")
+  @@index([updatedAt], map: "ix_agent_config_updated")
+}
+
+model Connector {
+  id         String        @id @default(uuid()) @db.Uuid
+  agentId    String        @db.Uuid @map("agent_id")
+  name       String        @db.Text
+  type       ConnectorType
+  dsnRef     String        @db.Text @map("dsn_ref")
+  allowlist  Json          @default(dbgenerated("'[]'::jsonb")) @db.JsonB
+  status     String        @default("UNKNOWN") @db.Text
+  lastOkAt   DateTime?     @map("last_ok_at") @db.Timestamptz(6)
+  createdAt  DateTime      @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt  DateTime      @updatedAt @db.Timestamptz(6) @map("updated_at")
+
+  agent    AgentConfig     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  health   ConnectorHealth[]
+  queries  QueryCode[]
+
+  @@map("connector")
+  @@index([agentId, type], map: "ix_connector_agent_type")
+}
+
+model ConnectorHealth {
+  id          String    @id @default(uuid()) @db.Uuid
+  connectorId String    @db.Uuid @map("connector_id")
+  status      String    @db.Text
+  rttMs       Int?      @map("rtt_ms")
+  checkedAt   DateTime  @map("checked_at") @db.Timestamptz(6)
+  details     Json?     @db.JsonB
+
+  connector Connector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+
+  @@map("connector_health")
+  @@index([connectorId, checkedAt], map: "ix_connector_health_checked")
+}
+
+model QueryCode {
+  id           String     @id @default(uuid()) @db.Uuid
+  indicatorId  String     @db.Uuid @map("indicator_id")
+  version      Int        @default(1)
+  checksum     String     @db.Text
+  sql          String     @db.Text
+  mapping      Json       @default(dbgenerated("'{}'::jsonb")) @db.JsonB
+  connectorId  String     @db.Uuid @map("connector_id")
+  vcsRef       String?    @map("vcs_ref") @db.Text
+  createdAt    DateTime   @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt    DateTime   @updatedAt @db.Timestamptz(6) @map("updated_at")
+
+  connector    Connector       @relation(fields: [connectorId], references: [id], onDelete: Restrict)
+  runs         Run[]
+
+  @@map("querycode")
+  @@unique([indicatorId, version], map: "uq_querycode_indicator_version")
+  @@index([indicatorId, checksum], map: "ix_querycode_indicator_checksum")
+}
+
+model SyncIndicator {
+  id                 String   @id @db.Uuid
+  code               String   @db.Text
+  name               String   @db.Text
+  direction          String   @db.Text
+  granularityDefault PeriodGranularity @map("granularity_default")
+  tolerance          Decimal? @db.Decimal(12, 6)
+  etag               String?  @db.Text
+  updatedAt          DateTime @default(now()) @db.Timestamptz(6) @map("updated_at")
+
+  segmentRules SyncSegmentRule[]
+  targets      SyncTarget[]
+
+  @@map("sync_indicator")
+}
+
+model SyncSegmentRule {
+  id           String   @id @default(uuid()) @db.Uuid
+  indicatorId  String   @db.Uuid @map("indicator_id")
+  allowedKeys  Json     @default(dbgenerated("'[]'::jsonb")) @db.JsonB @map("allowed_keys")
+  allowedValues Json?   @db.JsonB @map("allowed_values")
+  createdAt    DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  indicator SyncIndicator @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
+
+  @@map("sync_segment_rule")
+  @@index([indicatorId], map: "ix_sync_segment_rule_indicator")
+}
+
+model SyncTarget {
+  id             String            @id @default(uuid()) @db.Uuid
+  indicatorId    String            @db.Uuid @map("indicator_id")
+  periodStartUtc DateTime          @map("period_start_utc") @db.Timestamptz(6)
+  granularity    PeriodGranularity
+  segmentHash    Bytes?            @map("segment_hash") @db.Bytea
+  segmentKey     Json?             @map("segment_key")
+  targetValue    Decimal           @map("target_value") @db.Decimal(20, 6)
+  updatedAt      DateTime          @default(now()) @db.Timestamptz(6) @map("updated_at")
+
+  indicator SyncIndicator @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
+
+  @@map("sync_target")
+  @@index([indicatorId, periodStartUtc], map: "ix_sync_target_indicator_period")
+}
+
+model Run {
+  id             String            @id @default(uuid()) @db.Uuid
+  indicatorId    String            @db.Uuid @map("indicator_id")
+  periodStartUtc DateTime          @map("period_start_utc") @db.Timestamptz(6)
+  granularity    PeriodGranularity
+  state          RunState          @default(SCHEDULED)
+  attempt        Int               @default(0)
+  maxAttempts    Int               @default(6) @map("max_attempts")
+  startedAt      DateTime?         @map("started_at") @db.Timestamptz(6)
+  finishedAt     DateTime?         @map("finished_at") @db.Timestamptz(6)
+  error          String?           @db.Text
+  stats          Json?             @db.JsonB
+  createdAt      DateTime          @default(now()) @db.Timestamptz(6) @map("created_at")
+  queryCodeId    String?           @db.Uuid @map("querycode_id")
+
+  queryCode      QueryCode?        @relation(fields: [queryCodeId], references: [id], onDelete: SetNull)
+  results        RunResult[]
+  batches        OutboxBatch[]
+  validations    ValidationIssue[]
+
+  @@map("run")
+  @@index([indicatorId, periodStartUtc], map: "ix_run_indicator_period")
+  @@index([state], map: "ix_run_state")
+}
+
+model RunResult {
+  id             String            @id @default(uuid()) @db.Uuid
+  runId          String            @db.Uuid @map("run_id")
+  periodStartUtc DateTime          @map("period_start_utc") @db.Timestamptz(6)
+  granularity    PeriodGranularity
+  segmentKey     Json              @map("segment_key")
+  segmentHash    Bytes             @map("segment_hash") @db.Bytea
+  value          Decimal           @db.Decimal(20, 6)
+
+  run            Run               @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@map("run_result")
+  @@index([runId], map: "ix_rr_run")
+  @@index([segmentHash], map: "ix_rr_segment_hash")
+  @@index([segmentKey], map: "ix_rr_segment_key", type: Gin)
+}
+
+model OutboxBatch {
+  id             String        @id @default(uuid()) @db.Uuid
+  runId          String?       @db.Uuid @map("run_id")
+  batchId        String        @map("batch_id") @db.Text
+  checksum       String        @db.Text
+  state          PublishState  @default(PENDING)
+  attempt        Int           @default(0)
+  lastHttpStatus Int?          @map("last_http_status")
+  saasRequestId  String?       @map("saas_request_id") @db.Text
+  error          String?       @db.Text
+  createdAt      DateTime      @default(now()) @db.Timestamptz(6) @map("created_at")
+  publishedAt    DateTime?     @map("published_at") @db.Timestamptz(6)
+
+  run            Run?          @relation(fields: [runId], references: [id], onDelete: SetNull)
+  items          OutboxItem[]
+
+  @@map("outbox_batch")
+  @@unique([batchId, checksum], map: "uq_outbox_batch_id_checksum")
+  @@index([state], map: "ix_outbox_batch_state")
+}
+
+model OutboxItem {
+  id             String            @id @default(uuid()) @db.Uuid
+  outboxBatchId  String            @db.Uuid @map("outbox_batch_id")
+  indicatorId    String            @db.Uuid @map("indicator_id")
+  periodStartUtc DateTime          @map("period_start_utc") @db.Timestamptz(6)
+  granularity    PeriodGranularity
+  segmentKey     Json              @map("segment_key")
+  segmentHash    Bytes             @map("segment_hash") @db.Bytea
+  value          Decimal           @db.Decimal(20, 6)
+
+  batch          OutboxBatch      @relation(fields: [outboxBatchId], references: [id], onDelete: Cascade)
+
+  @@map("outbox_item")
+  @@index([outboxBatchId], map: "ix_outbox_item_batch")
+  @@index([indicatorId, periodStartUtc], map: "ix_outbox_item_indicator_period")
+}
+
+model ValidationIssue {
+  id        String    @id @default(uuid()) @db.Uuid
+  runId     String    @db.Uuid @map("run_id")
+  rule      String    @db.Text
+  severity  Severity
+  details   Json?     @db.JsonB
+  detectedAt DateTime @map("detected_at") @default(now()) @db.Timestamptz(6)
+
+  run Run @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@map("validation_issue")
+  @@index([runId], map: "ix_validation_issue_run")
+}
+
+model AuditLocal {
+  id        String   @id @default(uuid()) @db.Uuid
+  actor     String   @db.Text
+  action    String   @db.Text
+  entity    String   @db.Text
+  entityId  String?  @db.Uuid @map("entity_id")
+  diff      Json?    @db.JsonB
+  requestId String?  @map("request_id") @db.Text
+  at        DateTime @default(now()) @db.Timestamptz(6)
+
+  @@map("audit_local")
+  @@index([entity, entityId], map: "ix_audit_local_entity")
+}
+
+model KvStore {
+  key       String   @id @db.Text
+  value     Json     @default(dbgenerated("'{}'::jsonb")) @db.JsonB
+  updatedAt DateTime @updatedAt @db.Timestamptz(6) @map("updated_at")
+
+  @@map("kv_store")
+  @@index([updatedAt], map: "ix_kv_updated")
+}
