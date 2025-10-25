@@ -46,6 +46,7 @@ export default function ObjectivesPage() {
   });
 
   const { addToast } = useToast();
+  const [search, setSearch] = useState("");
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { name: "", description: "", periodId: selectedPeriod, startDate: "", endDate: "", cadence: "ANNUAL" },
@@ -89,6 +90,7 @@ export default function ObjectivesPage() {
   if (!token) return null;
 
   const objectives = objectivesQuery.data?.items ?? [];
+  const filtered = objectives.filter((o) => search.trim() ? o.name.toLowerCase().includes(search.trim().toLowerCase()) : true);
 
   return (
     <AppLayout title="Objetivos (OKRs)">
@@ -112,6 +114,15 @@ export default function ObjectivesPage() {
         </section>
 
         <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <div className="mb-3 flex items-center gap-3">
+            <input
+              placeholder="Buscar por nome"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-64 rounded-md border border-white/15 bg-black/30 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-white/60"
+              aria-label="Buscar objetivos"
+            />
+          </div>
           <h2 className="mb-3 text-sm font-semibold text-white/80">Criar objetivo</h2>
           <form
             onSubmit={form.handleSubmit((values) => createMutation.mutate(values))}
@@ -171,7 +182,9 @@ export default function ObjectivesPage() {
                 </tr>
               </thead>
               <tbody>
-                {objectives.map((o) => (
+                {objectivesQuery.isLoading ? (
+                  <tr><td colSpan={4} className="px-3 py-6 text-center text-white/50">Carregando...</td></tr>
+                ) : filtered.map((o) => (
                   <tr key={o.id} className="odd:bg-white/[0.025]">
                     <td className="px-3 py-2 font-medium text-white">{o.name}</td>
                     <td className="px-3 py-2 text-white/80">{new Date(o.startDate).toLocaleDateString()}</td>
@@ -179,7 +192,7 @@ export default function ObjectivesPage() {
                     <td className="px-3 py-2 text-white/80">{o.cadence}</td>
                   </tr>
                 ))}
-                {objectives.length === 0 && (
+                {!objectivesQuery.isLoading && filtered.length === 0 && (
                   <tr>
                     <td colSpan={4} className="px-3 py-10 text-center text-white/50">Nenhum objetivo neste período.</td>
                   </tr>

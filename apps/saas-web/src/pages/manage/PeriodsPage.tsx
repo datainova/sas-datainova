@@ -22,6 +22,8 @@ export function PeriodsPage() {
   const token = session?.accessToken ?? "";
   const [cursor, setCursor] = useState<string | undefined>();
   const { addToast } = useToast();
+  const [search, setSearch] = useState("");
+  const [cadence, setCadence] = useState<string | "">("");
 
   const listQuery = useQuery({
     enabled: Boolean(token),
@@ -52,12 +54,39 @@ export function PeriodsPage() {
   if (!token) return null;
 
   const items = listQuery.data?.items ?? [];
+  const filtered = items.filter((p) => {
+    const matchesSearch = search.trim() ? p.name.toLowerCase().includes(search.trim().toLowerCase()) : true;
+    const matchesCadence = cadence ? p.cadence === cadence : true;
+    return matchesSearch && matchesCadence;
+  });
   const next = listQuery.data?.page?.next ?? null;
 
   return (
     <AppLayout title="Períodos">
       <div className="mx-auto max-w-6xl">
         <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <input
+              placeholder="Buscar por nome"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-64 rounded-md border border-white/15 bg-black/30 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-white/60"
+              aria-label="Buscar períodos"
+            />
+            <select
+              value={cadence}
+              onChange={(e) => setCadence(e.target.value as any)}
+              className="rounded-md border border-white/15 bg-black/30 px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-white/60"
+              aria-label="Filtrar por cadência"
+            >
+              <option value="">Todas cadências</option>
+              <option value="ANNUAL">Anual</option>
+              <option value="SEMIANNUAL">Semestral</option>
+              <option value="QUARTERLY">Trimestral</option>
+              <option value="MONTHLY">Mensal</option>
+              <option value="BIENNIAL">Bienal</option>
+            </select>
+          </div>
           <h2 className="mb-3 text-sm font-semibold text-white/80">Criar novo período</h2>
           <form
             onSubmit={form.handleSubmit((values) => createMutation.mutate(values))}
@@ -120,7 +149,9 @@ export function PeriodsPage() {
                 </tr>
               </thead>
               <tbody>
-                {items.map((p) => (
+                {listQuery.isLoading ? (
+                  <tr><td colSpan={4} className="px-3 py-6 text-center text-white/50">Carregando...</td></tr>
+                ) : filtered.map((p) => (
                   <tr key={p.id} className="odd:bg-white/[0.025]">
                     <td className="px-3 py-2 font-medium text-white"><a className="hover:underline" href={`/wizard/objectives/${p.id}`}>{p.name}</a></td>
                     <td className="px-3 py-2 text-white/80">{new Date(p.startDate).toLocaleDateString()}</td>
@@ -128,7 +159,7 @@ export function PeriodsPage() {
                     <td className="px-3 py-2 text-white/80">{p.cadence}</td>
                   </tr>
                 ))}
-                {items.length === 0 && (
+                {!listQuery.isLoading && filtered.length === 0 && (
                   <tr>
                     <td colSpan={4} className="px-3 py-10 text-center text-white/50">Nenhum período encontrado.</td>
                   </tr>

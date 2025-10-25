@@ -110,6 +110,15 @@ export default function IndicatorsPage() {
   });
 
   const indicators = indicatorsQuery.data ?? [];
+  const [search, setSearch] = useState("");
+  const [dir, setDir] = useState<string | "">("");
+  const [gran, setGran] = useState<string | "">("");
+  const filtered = indicators.filter((i) => {
+    const matchSearch = search.trim() ? (i.code + " " + i.name).toLowerCase().includes(search.trim().toLowerCase()) : true;
+    const matchDir = dir ? i.direction === dir : true;
+    const matchGran = gran ? i.granularityDefault === gran : true;
+    return matchSearch && matchDir && matchGran;
+  });
 
   if (!token) return null;
 
@@ -164,6 +173,31 @@ export default function IndicatorsPage() {
         </section>
 
         <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <input
+              placeholder={`Buscar ${modeKr ? "KR" : "KPI"}`}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-64 rounded-md border border-white/15 bg-black/30 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-white/60"
+              aria-label="Buscar indicadores"
+            />
+            <select value={dir} onChange={(e) => setDir(e.target.value)} className="rounded-md border border-white/15 bg-black/30 px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-white/60" aria-label="Direção">
+              <option value="">Todas direções</option>
+              <option value="UP">Para cima</option>
+              <option value="DOWN">Para baixo</option>
+              <option value="RANGE">Dentro da faixa</option>
+              <option value="EQUAL">Igual</option>
+              <option value="OUTSIDE_RANGE">Fora da faixa</option>
+            </select>
+            <select value={gran} onChange={(e) => setGran(e.target.value)} className="rounded-md border border-white/15 bg-black/30 px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-white/60" aria-label="Granularidade">
+              <option value="">Todas granularidades</option>
+              <option value="MONTH">Mensal</option>
+              <option value="QUARTER">Trimestral</option>
+              <option value="YEAR">Anual</option>
+              <option value="WEEK">Semanal</option>
+              <option value="DAY">Diária</option>
+            </select>
+          </div>
           <h2 className="mb-3 text-sm font-semibold text-white/80">Criar {modeKr ? "KR" : "KPI"}</h2>
           <form
             onSubmit={form.handleSubmit((values) => createMutation.mutate(values))}
@@ -228,7 +262,9 @@ export default function IndicatorsPage() {
                 </tr>
               </thead>
               <tbody>
-                {indicators.map((i) => (
+                {indicatorsQuery.isLoading ? (
+                  <tr><td colSpan={4} className="px-3 py-6 text-center text-white/50">Carregando...</td></tr>
+                ) : filtered.map((i) => (
                   <tr key={i.id} className="odd:bg-white/[0.025]">
                     <td className="px-3 py-2 font-mono text-white">{i.code}</td>
                     <td className="px-3 py-2 text-white/90">{i.name}</td>
@@ -236,7 +272,7 @@ export default function IndicatorsPage() {
                     <td className="px-3 py-2 text-white/80">{i.granularityDefault}</td>
                   </tr>
                 ))}
-                {indicators.length === 0 && (
+                {!indicatorsQuery.isLoading && filtered.length === 0 && (
                   <tr>
                     <td colSpan={4} className="px-3 py-10 text-center text-white/50">Nenhum registro encontrado.</td>
                   </tr>
