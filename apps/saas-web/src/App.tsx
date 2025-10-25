@@ -5,6 +5,7 @@ import { SignupCompletePage } from "./pages/SignupCompletePage";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { ObjectivesWizardPage } from "./pages/wizard/ObjectivesWizardPage";
 import { HomePage } from "./pages/HomePage";
+import { DashboardPage } from "./pages/DashboardPage";
 import { PeriodsPage } from "./pages/manage/PeriodsPage";
 import { useAuthSession } from "./hooks/useAuthSession";
 
@@ -40,7 +41,7 @@ export default function App() {
     }
     const path = window.location.pathname;
     if ((path === "/" || path === "") && isAuthenticated) {
-      window.location.replace("/home");
+      window.location.replace("/app");
     }
   }, [isAuthenticated]);
 
@@ -60,8 +61,8 @@ export default function App() {
     return <PeriodsPage />;
   }
 
-  if (shouldRenderHome()) {
-    return <HomePage />;
+  if (shouldRenderDashboard()) {
+    return <DashboardPage />;
   }
 
   return <LoginPage />;
@@ -86,11 +87,17 @@ function shouldRenderObjectivesWizard() {
 function shouldRenderHome() {
   if (typeof window === "undefined") return false;
   const { pathname } = window.location;
-  return pathname === "/" || pathname === "" || pathname.startsWith("/home") || pathname.startsWith("/manage/");
+  return pathname === "/home";
 }
 
 function shouldRenderManagePeriods() {
   if (typeof window === "undefined") return false;
   const { pathname } = window.location;
   return pathname.startsWith("/manage/periods");
+}
+
+function shouldRenderDashboard() {
+  if (typeof window === "undefined") return false;
+  const { pathname } = window.location;
+  return pathname === "/app" || pathname === "/dashboard";
 }
