@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 
 import { LoginPage } from "./pages/LoginPage";
 import { SignupCompletePage } from "./pages/SignupCompletePage";
@@ -33,93 +34,36 @@ function shouldRenderSignupComplete() {
 
 export default function App() {
   const { isAuthenticated } = useAuthSession();
+  return (
+    <Routes>
+      <Route path="/" element={isAuthenticated ? <Navigate to="/app" replace /> : <LoginPage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/home" element={<Navigate to="/app" replace />} />
+      <Route path="/auth/signup/confirm" element={<SignupCompletePage />} />
+      <Route path="/signup/complete" element={<SignupCompletePage />} />
 
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    if (!isAuthenticated) {
-      return;
-    }
-    const path = window.location.pathname;
-    if ((path === "/" || path === "") && isAuthenticated) {
-      window.location.replace("/app");
-    }
-  }, [isAuthenticated]);
+      <Route element={<PrivateRoute />}> 
+        <Route path="/app" element={<DashboardPage />} />
+        <Route path="/onboarding" element={<OnboardingPage />} />
+        <Route path="/wizard/objectives">
+          <Route index element={<ObjectivesWizardPage />} />
+          <Route path=":periodId" element={<ObjectivesWizardPage />} />
+        </Route>
+        <Route path="/manage/periods" element={<PeriodsPage />} />
+        <Route path="/manage/objectives" element={<ObjectivesPage />} />
+        <Route path="/manage/indicators" element={<IndicatorsPage />} />
+      </Route>
 
-  if (shouldRenderSignupComplete()) {
-    return <SignupCompletePage />;
-  }
-
-  if (shouldRenderObjectivesWizard()) {
-    return <ObjectivesWizardPage />;
-  }
-
-  if (shouldRenderOnboarding()) {
-    return <OnboardingPage />;
-  }
-
-  if (shouldRenderManagePeriods()) {
-    return <PeriodsPage />;
-  }
-
-  if (shouldRenderManageObjectives()) {
-    return <ObjectivesPage />;
-  }
-
-  if (shouldRenderManageIndicators()) {
-    return <IndicatorsPage />;
-  }
-
-  if (shouldRenderDashboard()) {
-    return <DashboardPage />;
-  }
-
-  return <LoginPage />;
+      <Route path="*" element={<Navigate to={isAuthenticated ? "/app" : "/"} replace />} />
+    </Routes>
+  );
 }
 
-function shouldRenderOnboarding() {
-  if (typeof window === "undefined") {
-    return false;
+function PrivateRoute() {
+  const { isAuthenticated } = useAuthSession();
+  const location = useLocation();
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
   }
-  const { pathname } = window.location;
-  return pathname.startsWith("/onboarding");
-}
-
-function shouldRenderObjectivesWizard() {
-  if (typeof window === "undefined") {
-    return false;
-  }
-  const { pathname } = window.location;
-  return pathname.startsWith("/wizard/objectives");
-}
-
-function shouldRenderHome() {
-  if (typeof window === "undefined") return false;
-  const { pathname } = window.location;
-  return pathname === "/home";
-}
-
-function shouldRenderManagePeriods() {
-  if (typeof window === "undefined") return false;
-  const { pathname } = window.location;
-  return pathname.startsWith("/manage/periods");
-}
-
-function shouldRenderManageObjectives() {
-  if (typeof window === "undefined") return false;
-  const { pathname } = window.location;
-  return pathname.startsWith("/manage/objectives");
-}
-
-function shouldRenderManageIndicators() {
-  if (typeof window === "undefined") return false;
-  const { pathname } = window.location;
-  return pathname.startsWith("/manage/indicators");
-}
-
-function shouldRenderDashboard() {
-  if (typeof window === "undefined") return false;
-  const { pathname } = window.location;
-  return pathname === "/app" || pathname === "/dashboard";
+  return <Outlet />;
 }

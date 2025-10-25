@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { useLocation, Link } from "react-router-dom";
 import { LayoutDashboard, Target, CalendarRange, Users, Settings, LogOut, BadgeCheck, Layers } from "lucide-react";
 import { useAuthSession } from "../hooks/useAuthSession";
 
@@ -7,7 +8,8 @@ export function AppLayout({ title, children }: { title?: string; children: React
   const email = session?.user.email ?? "";
   const name = session?.user.name ?? undefined;
   const org = session?.organization?.name ?? "";
-  const pathname = typeof window !== "undefined" ? window.location.pathname : "/";
+  const location = useLocation();
+  const pathname = location.pathname;
 
   const items = useMemo(
     () => [
@@ -33,16 +35,16 @@ export function AppLayout({ title, children }: { title?: string; children: React
             {items.map((item) => {
               const active = pathname === item.href || (pathname.startsWith(item.href) && item.href !== "/app");
               return (
-                <a
+                <Link
                   key={item.href}
-                  href={item.href}
+                  to={item.href}
                   className={`flex items-center gap-2 rounded-md px-2 py-2 text-sm transition ${
                     active ? "bg-white/10 text-white" : "text-white/70 hover:bg-white/5 hover:text-white"
                   }`}
                 >
                   {item.icon}
                   <span>{item.label}</span>
-                </a>
+                </Link>
               );
             })}
           </nav>
@@ -73,7 +75,10 @@ export function AppLayout({ title, children }: { title?: string; children: React
               </div>
             </div>
           </header>
-          <main className="px-4 py-6 md:px-6">{children}</main>
+          <main className="px-4 py-6 md:px-6">
+            <Breadcrumbs />
+            {children}
+          </main>
         </div>
       </div>
     </div>
@@ -81,3 +86,39 @@ export function AppLayout({ title, children }: { title?: string; children: React
 }
 
 export default AppLayout;
+
+function Breadcrumbs() {
+  const location = useLocation();
+  const path = location.pathname.replace(/\/+$/, "");
+  const segments = path.split("/").filter(Boolean);
+
+  const labelMap: Record<string, string> = {
+    app: "Dashboard",
+    manage: "Cadastros",
+    periods: "Períodos",
+    objectives: "Objetivos",
+    indicators: "Indicadores",
+    wizard: "Wizard",
+  };
+
+  if (segments.length <= 1) return null;
+
+  return (
+    <nav className="mb-4 text-xs text-white/60" aria-label="Breadcrumb">
+      <ol className="flex items-center gap-2">
+        <li><Link to="/app" className="hover:underline">Home</Link></li>
+        {segments.map((seg, idx) => {
+          const href = "/" + segments.slice(0, idx + 1).join("/");
+          const isLast = idx === segments.length - 1;
+          const label = labelMap[seg] ?? seg;
+          return (
+            <li key={href} className="flex items-center gap-2">
+              <span className="opacity-40">/</span>
+              {isLast ? <span className="text-white/80">{label}</span> : <Link to={href} className="hover:underline">{label}</Link>}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
