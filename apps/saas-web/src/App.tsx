@@ -7,6 +7,8 @@ import { ObjectivesWizardPage } from "./pages/wizard/ObjectivesWizardPage";
 import { HomePage } from "./pages/HomePage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { PeriodsPage } from "./pages/manage/PeriodsPage";
+import ObjectivesPage from "./pages/manage/ObjectivesPage";
+import IndicatorsPage from "./pages/manage/IndicatorsPage";
 import { useAuthSession } from "./hooks/useAuthSession";
 
 const SIGNUP_PATH_PREFIXES = [
@@ -61,6 +63,14 @@ export default function App() {
     return <PeriodsPage />;
   }
 
+  if (shouldRenderManageObjectives()) {
+    return <ObjectivesPage />;
+  }
+
+  if (shouldRenderManageIndicators()) {
+    return <IndicatorsPage />;
+  }
+
   if (shouldRenderDashboard()) {
     return <DashboardPage />;
   }
@@ -94,6 +104,18 @@ function shouldRenderManagePeriods() {
   if (typeof window === "undefined") return false;
   const { pathname } = window.location;
   return pathname.startsWith("/manage/periods");
+}
+
+function shouldRenderManageObjectives() {
+  if (typeof window === "undefined") return false;
+  const { pathname } = window.location;
+  return pathname.startsWith("/manage/objectives");
+}
+
+function shouldRenderManageIndicators() {
+  if (typeof window === "undefined") return false;
+  const { pathname } = window.location;
+  return pathname.startsWith("/manage/indicators");
 }
 
 function shouldRenderDashboard() {

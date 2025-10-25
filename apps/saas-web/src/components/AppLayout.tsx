@@ -81,4 +81,3 @@ export function AppLayout({ title, children }: { title?: string; children: React
 }
 
 export default AppLayout;
-
