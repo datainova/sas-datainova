@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Plus } from "lucide-react";
 import { useAuthSession } from "../../hooks/useAuthSession";
 import { createPeriod, listPeriods, updatePeriod } from "../../api/wizard";
+import { useToast } from "../../components/ToastProvider";
 import AppLayout from "../../components/AppLayout";
 
 const schema = z.object({
@@ -20,6 +21,7 @@ export function PeriodsPage() {
   const { session } = useAuthSession();
   const token = session?.accessToken ?? "";
   const [cursor, setCursor] = useState<string | undefined>();
+  const { addToast } = useToast();
 
   const listQuery = useQuery({
     enabled: Boolean(token),
@@ -37,7 +39,14 @@ export function PeriodsPage() {
 
   const createMutation = useMutation({
     mutationFn: (values: FormValues) => createPeriod(token, values),
-    onSuccess: () => listQuery.refetch(),
+    onSuccess: () => {
+      addToast({ type: "success", title: "Período criado" });
+      listQuery.refetch();
+      form.reset({ name: "", startDate: "", endDate: "", cadence: "ANNUAL" });
+    },
+    onError: (err: any) => {
+      addToast({ type: "error", title: "Falha ao criar período", description: String(err?.message ?? err) });
+    }
   });
 
   if (!token) return null;

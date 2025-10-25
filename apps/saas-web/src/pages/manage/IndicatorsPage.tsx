@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import AppLayout from "../../components/AppLayout";
 import { useAuthSession } from "../../hooks/useAuthSession";
 import { createIndicator, listIndicators, listObjectives, listPeriods } from "../../api/wizard";
+import { useToast } from "../../components/ToastProvider";
 import type { CreateIndicatorRequest, IndicatorDefinition, PeriodGranularity } from "../../types/wizard";
 import { Loader2, Plus, ToggleLeft, ToggleRight } from "lucide-react";
 
@@ -26,6 +27,7 @@ type FormValues = z.infer<typeof baseSchema> & {
 export default function IndicatorsPage() {
   const { session } = useAuthSession();
   const token = session?.accessToken ?? "";
+  const { addToast } = useToast();
 
   const [modeKr, setModeKr] = useState<boolean>(true); // true = KR, false = KPI
   const [periodId, setPeriodId] = useState<string | undefined>();
@@ -92,7 +94,19 @@ export default function IndicatorsPage() {
       };
       return createIndicator(token, payload);
     },
-    onSuccess: () => indicatorsQuery.refetch(),
+    onSuccess: () => {
+      addToast({ type: "success", title: `${modeKr ? "KR" : "KPI"} criado` });
+      indicatorsQuery.refetch();
+      form.reset({
+        isKeyResult: modeKr,
+        code: "",
+        name: "",
+        direction: "UP",
+        granularityDefault: "MONTH",
+        unit: "",
+      });
+    },
+    onError: (err: any) => addToast({ type: "error", title: `Falha ao criar ${modeKr ? "KR" : "KPI"}`, description: String(err?.message ?? err) }),
   });
 
   const indicators = indicatorsQuery.data ?? [];
@@ -235,4 +249,3 @@ export default function IndicatorsPage() {
     </AppLayout>
   );
 }
-

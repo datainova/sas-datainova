@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import AppLayout from "../../components/AppLayout";
 import { useAuthSession } from "../../hooks/useAuthSession";
 import { createObjective, listObjectives, listPeriods } from "../../api/wizard";
+import { useToast } from "../../components/ToastProvider";
 import type { StrategicPeriod, StrategicCadence } from "../../types/wizard";
 import { Loader2, Plus, CalendarRange } from "lucide-react";
 
@@ -44,6 +45,7 @@ export default function ObjectivesPage() {
     queryFn: () => listObjectives(token, selectedPeriod!, { limit: 100 }),
   });
 
+  const { addToast } = useToast();
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { name: "", description: "", periodId: selectedPeriod, startDate: "", endDate: "", cadence: "ANNUAL" },
@@ -69,7 +71,19 @@ export default function ObjectivesPage() {
         endDate: new Date(values.endDate).toISOString(),
         cadence: values.cadence,
       }),
-    onSuccess: () => objectivesQuery.refetch(),
+    onSuccess: () => {
+      addToast({ type: "success", title: "Objetivo criado" });
+      objectivesQuery.refetch();
+      form.reset({
+        name: "",
+        description: "",
+        periodId: selectedPeriod,
+        startDate: form.getValues("startDate"),
+        endDate: form.getValues("endDate"),
+        cadence: form.getValues("cadence"),
+      });
+    },
+    onError: (err: any) => addToast({ type: "error", title: "Falha ao criar objetivo", description: String(err?.message ?? err) }),
   });
 
   if (!token) return null;
@@ -178,4 +192,3 @@ export default function ObjectivesPage() {
     </AppLayout>
   );
 }
-
