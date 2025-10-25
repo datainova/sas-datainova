@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -211,23 +211,15 @@ export function ObjectivesWizardPage() {
     }, 800);
   }, [draftKey, krForm, objectiveForm, pathPeriodId, period, periodForm, selectedObjectiveId, step]);
 
-  // Watch forms and state changes
-  useEffect(() => {
-    const unsub1 = periodForm.watch(() => scheduleAutosave());
-    const unsub2 = objectiveForm.watch(() => scheduleAutosave());
-    const unsub3 = krForm.watch(() => scheduleAutosave());
-    const unsub4 = piForm.watch(() => scheduleAutosave());
-    return () => {
-      unsub1?.();
-      unsub2?.();
-      unsub3?.();
-      unsub4?.();
-    };
-  }, [periodForm, objectiveForm, krForm, piForm, scheduleAutosave]);
+  // Watch forms via hook (no manual unsubscribe) and trigger autosave
+  const periodValues = useWatch({ control: periodForm.control });
+  const objectiveValues = useWatch({ control: objectiveForm.control });
+  const krValues = useWatch({ control: krForm.control });
+  const piValues = useWatch({ control: piForm.control });
 
   useEffect(() => {
     scheduleAutosave();
-  }, [selectedObjectiveId, step, scheduleAutosave]);
+  }, [periodValues, objectiveValues, krValues, piValues, selectedObjectiveId, step, scheduleAutosave]);
 
 
   const createPeriodMutation = useMutation({
