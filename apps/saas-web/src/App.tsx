@@ -3,6 +3,9 @@ import { useEffect } from "react";
 import { LoginPage } from "./pages/LoginPage";
 import { SignupCompletePage } from "./pages/SignupCompletePage";
 import { OnboardingPage } from "./pages/OnboardingPage";
+import { ObjectivesWizardPage } from "./pages/wizard/ObjectivesWizardPage";
+import { HomePage } from "./pages/HomePage";
+import { PeriodsPage } from "./pages/manage/PeriodsPage";
 import { useAuthSession } from "./hooks/useAuthSession";
 
 const SIGNUP_PATH_PREFIXES = [
@@ -36,8 +39,8 @@ export default function App() {
       return;
     }
     const path = window.location.pathname;
-    if (path === "/" || path === "") {
-      window.location.replace("/onboarding");
+    if ((path === "/" || path === "") && isAuthenticated) {
+      window.location.replace("/home");
     }
   }, [isAuthenticated]);
 
@@ -45,8 +48,20 @@ export default function App() {
     return <SignupCompletePage />;
   }
 
+  if (shouldRenderObjectivesWizard()) {
+    return <ObjectivesWizardPage />;
+  }
+
   if (shouldRenderOnboarding()) {
     return <OnboardingPage />;
+  }
+
+  if (shouldRenderManagePeriods()) {
+    return <PeriodsPage />;
+  }
+
+  if (shouldRenderHome()) {
+    return <HomePage />;
   }
 
   return <LoginPage />;
@@ -58,4 +73,24 @@ function shouldRenderOnboarding() {
   }
   const { pathname } = window.location;
   return pathname.startsWith("/onboarding");
+}
+
+function shouldRenderObjectivesWizard() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  const { pathname } = window.location;
+  return pathname.startsWith("/wizard/objectives");
+}
+
+function shouldRenderHome() {
+  if (typeof window === "undefined") return false;
+  const { pathname } = window.location;
+  return pathname === "/" || pathname === "" || pathname.startsWith("/home") || pathname.startsWith("/manage/");
+}
+
+function shouldRenderManagePeriods() {
+  if (typeof window === "undefined") return false;
+  const { pathname } = window.location;
+  return pathname.startsWith("/manage/periods");
 }
