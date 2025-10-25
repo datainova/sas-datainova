@@ -399,15 +399,16 @@ export function OnboardingPage() {
   });
 
   useEffect(() => {
-    if (!celebrating || prefersReducedMotion || completionRedirectScheduled) {
+    if (!celebrating || completionRedirectScheduled) {
       return;
     }
     const timeout = window.setTimeout(() => {
       setCompletionRedirectScheduled(true);
-      window.location.replace("/");
-    }, 4000);
+      // Após concluir o onboarding, direcionar para o wizard de objetivos
+      window.location.replace("/wizard/objectives");
+    }, 2000);
     return () => window.clearTimeout(timeout);
-  }, [celebrating, prefersReducedMotion, completionRedirectScheduled]);
+  }, [celebrating, completionRedirectScheduled]);
 
   useEffect(() => {
     if (!currentSession?.id || !session?.accessToken) {
