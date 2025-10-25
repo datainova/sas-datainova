@@ -3,9 +3,10 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Plus, ArrowLeft } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 import { useAuthSession } from "../../hooks/useAuthSession";
 import { createPeriod, listPeriods, updatePeriod } from "../../api/wizard";
+import AppLayout from "../../components/AppLayout";
 
 const schema = z.object({
   name: z.string().trim().min(2, "Informe um nome com 2+ caracteres"),
@@ -45,18 +46,8 @@ export function PeriodsPage() {
   const next = listQuery.data?.page?.next ?? null;
 
   return (
-    <div className="min-h-screen bg-[#0b0b0b] text-white">
-      <header className="border-b border-white/10 bg-[#0e0e0e]">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:px-6">
-          <a href="/home" className="inline-flex items-center gap-2 text-sm text-white/70 hover:text-white/90">
-            <ArrowLeft className="h-4 w-4" /> Voltar
-          </a>
-          <h1 className="font-display text-xl">Períodos</h1>
-          <div />
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+    <AppLayout title="Períodos">
+      <div className="mx-auto max-w-6xl">
         <section className="rounded-xl border border-white/10 bg-white/5 p-4">
           <h2 className="mb-3 text-sm font-semibold text-white/80">Criar novo período</h2>
           <form
@@ -144,10 +135,9 @@ export function PeriodsPage() {
             ) : null}
           </div>
         </section>
-      </main>
-    </div>
+      </div>
+    </AppLayout>
   );
 }
 
 export default PeriodsPage;
-
