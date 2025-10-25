@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, forwardRef } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -691,19 +691,28 @@ function StepperDivider() {
   return <div className="h-px w-10 bg-white/30" />;
 }
 
-function FieldText({ label, error, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string; error?: string }) {
-  return (
-    <label className="block text-sm">
-      <div className="mb-1 font-medium text-white/90">{label}</div>
-      <input {...props} type={props.type ?? "text"} className={`w-full rounded-md border bg-black/30 p-2 text-white outline-none focus:ring-2 focus:ring-white/60 ${error ? "border-red-400/60" : "border-white/15"}`} />
-      {error && <div className="mt-1 text-xs text-red-300">{error}</div>}
-    </label>
-  );
-}
+const FieldText = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement> & { label: string; error?: string }>(
+  ({ label, error, ...props }, ref) => {
+    return (
+      <label className="block text-sm">
+        <div className="mb-1 font-medium text-white/90">{label}</div>
+        <input
+          ref={ref}
+          {...props}
+          type={props.type ?? "text"}
+          className={`w-full rounded-md border bg-black/30 p-2 text-white outline-none focus:ring-2 focus:ring-white/60 ${error ? "border-red-400/60" : "border-white/15"}`}
+        />
+        {error && <div className="mt-1 text-xs text-red-300">{error}</div>}
+      </label>
+    );
+  }
+);
+FieldText.displayName = "FieldText";
 
-function FieldDate(props: React.InputHTMLAttributes<HTMLInputElement> & { label: string; error?: string }) {
-  return <FieldText {...props} type="date" />;
-}
+const FieldDate = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement> & { label: string; error?: string }>((props, ref) => {
+  return <FieldText ref={ref} {...props} type="date" />;
+});
+FieldDate.displayName = "FieldDate";
 
 function FieldSelectCadence({ label, value, onChange }: { label: string; value: StrategicCadence; onChange: (v: StrategicCadence) => void }) {
   return (
